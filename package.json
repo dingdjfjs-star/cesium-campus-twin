@@ -1,0 +1,19 @@
+{
+  "name": "cesium-campus-twin",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "智慧校园数字孪生三维可视化 Demo (CesiumJS + Vite)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cesium": "^1.125.0",
+    "echarts": "^5.5.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8"
+  }
+}

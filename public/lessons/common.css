@@ -1,0 +1,67 @@
+/* 数字孪生入门课程 · 共享教学样式 */
+:root{
+  --ink:#1f2937; --muted:#64748b; --accent:#0891b2; --cyan:#06b6d4;
+  --bg:#f8fafc; --card:#fff; --line:#e2e8f0;
+  --code-bg:#0f172a; --code-ink:#e2e8f0;
+  --ok:#059669; --warn:#d97706; --pit:#dc2626;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.9}
+header.site{position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:10px 20px;background:#0f172a;color:#e2e8f0;font-size:14px;box-shadow:0 2px 12px rgba(2,6,23,.3)}
+header.site a{color:#67e8f9;text-decoration:none;white-space:nowrap}
+header.site .crs{color:#94a3b8;font-size:13px;overflow:hidden;text-overflow:ellipsis}
+main{max-width:900px;margin:0 auto;padding:26px 20px 90px}
+h1{font-size:26px;margin:.2em 0 .1em}
+.lead{color:var(--muted);font-size:15px;margin-top:0}
+h2{font-size:19px;margin-top:2.2em;padding-left:10px;border-left:4px solid var(--accent)}
+h3{font-size:16px;margin-top:1.6em}
+p{font-size:15px}
+section.demo{background:#0f172a;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(2,6,23,.28);margin:1.4em 0}
+#globe{width:100%;height:430px;position:relative}
+#globe .cesium-viewer-bottom{opacity:.5}
+.demo-bar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;background:#0b1322;border-top:1px solid #1e293b;align-items:center}
+.demo-bar .note{color:#64748b;font-size:12px;margin-left:auto}
+button.run{cursor:pointer;font-size:13px;color:#e0f2fe;background:#155e75;border:1px solid #0e7490;border-radius:8px;padding:7px 14px;transition:.15s}
+button.run:hover{background:#0e7490}
+button.run.warn{background:#7c2d12;border-color:#9a3412}
+button.run.ok{background:#065f46;border-color:#047857}
+button.run:disabled{opacity:.4;cursor:not-allowed}
+input.run{font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;width:130px}
+pre.code{background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.75}
+pre.code code{background:none;padding:0}
+code{background:#e0f2fe;color:#075985;border-radius:4px;padding:1px 6px;font-size:.9em;font-family:Consolas,Menlo,monospace}
+table.tbl{width:100%;border-collapse:collapse;font-size:14px;margin:1em 0}
+table.tbl th,table.tbl td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;background:#fff}
+table.tbl th{background:#f1f5f9}
+.tip,.warn,.pit,.story{border-radius:10px;padding:12px 16px;margin:1.3em 0;font-size:14px}
+.tip{background:#ecfdf5;border:1px solid #a7f3d0}
+.warn{background:#fffbeb;border:1px solid #fde68a}
+.pit{background:#fef2f2;border:1px solid #fecaca}
+.story{background:#eef2ff;border:1px solid #c7d2fe}
+.tip::before{content:"💡 小贴士 · ";font-weight:700;color:var(--ok)}
+.warn::before{content:"⚠ 注意 · ";font-weight:700;color:var(--warn)}
+.pit::before{content:"🕳 踩坑实录 · ";font-weight:700;color:var(--pit)}
+.story::before{content:"📖 对应真实项目 · ";font-weight:700;color:#4f46e5}
+details.quiz{background:#f1f5f9;border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin:.7em 0;font-size:14px}
+details.quiz summary{cursor:pointer;font-weight:600}
+details.quiz p{margin:.5em 0 0}
+ol.lineseq{counter-reset:ln;margin:0;padding:0;list-style:none}
+ol.lineseq li{position:relative;padding:7px 12px 7px 46px;background:#fff;border:1px solid var(--line);border-radius:8px;margin:7px 0;font-size:14px}
+ol.lineseq li::before{counter-increment:ln;content:counter(ln);position:absolute;left:11px;top:9px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.kbd{border:1px solid #cbd5e1;border-bottom-width:3px;border-radius:5px;padding:0 6px;background:#fff;font-size:12px;font-family:Consolas,monospace}
+.pager{display:flex;justify-content:space-between;gap:12px;margin-top:52px}
+.pager a{flex:1;text-decoration:none;border:1px solid var(--line);background:#fff;border-radius:10px;padding:12px 16px;font-size:14px;color:var(--ink)}
+.pager a b{color:var(--accent);display:block;font-size:12px;margin-bottom:2px}
+.pager a:hover{border-color:var(--cyan)}
+.homework{background:#fffbeb;border:2px dashed #f59e0b;border-radius:12px;padding:14px 18px;margin:1.6em 0}
+.homework h3{margin:0 0 .4em;color:#b45309}
+.homework ol,.homework ul{margin:.4em 0 .2em 1.4em;padding:0;font-size:14px}
+.err-banner{position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;padding:6px 12px;font:13px Consolas,monospace;z-index:999;white-space:pre-wrap}
+.arch{display:flex;gap:10px;flex-wrap:wrap;margin:1em 0}
+.arch .box{flex:1;min-width:180px;border-radius:10px;padding:12px 14px;font-size:13px;border:1px solid var(--line);background:#fff}
+.arch .box b{display:block;font-size:15px;margin-bottom:4px}
+.arch .box small{color:var(--muted)}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:1em 0;font-size:14px}
+.flow .step{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.flow .arr{color:var(--accent);font-weight:700}

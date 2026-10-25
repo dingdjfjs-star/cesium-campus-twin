@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 9 课 · 告警闭环 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson8.html">← 上一课</a>
+  <span class="crs">第 9 课 · 告警闭环（把前 8 课串成"数字孪生"）</span>
+  <a href="./lesson10.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 9 课：告警闭环——数字孪生的灵魂时刻</h1>
+  <p class="lead">前面学的零件，这节课组装成一台完整机器：<b>模拟感知 → 波纹+染红 → 定位 → 处理还原</b>。这四步就是答辩时讲的"感知-呈现-定位-处置闭环"，评委看到这一幕就懂了你在做什么。</p>
+
+  <h2>先玩一玩 👇（等 3 秒会自动来一条告警；也可手动）</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run ok" onclick="randomAlarm()">🚨 模拟一条随机告警</button>
+      <button class="run warn" onclick="resolveAll()">✔ 一键处理全部</button>
+      <span class="note">然后在下方告警列表里点「📍定位」和「✔处理」</span>
+    </div>
+  </section>
+
+  <div style="max-width:520px;margin:10px auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px">
+    <b style="font-size:15px">实时告警 <span id="alarmCount" style="background:#fee2e2;color:#dc2626;border-radius:99px;padding:1px 10px;font-size:12px">0</span></b>
+    <ul id="alarmList" style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px"></ul>
+  </div>
+
+  <h2>一、先看清这台机器的四个齿轮</h2>
+  <div class="flow">
+    <span class="step">① 感知:模拟 IoT 推来一条告警<br><small>(真实系统=传感器/WebSocket)</small></span><span class="arr">→</span>
+    <span class="step">② 呈现:楼染红 + 波纹扩散<br><small>(第4课材质 + 第8课配方B)</small></span><span class="arr">→</span>
+    <span class="step">③ 定位:点「定位」镜头飞到现场<br><small>(第2课 flyTo)</small></span><span class="arr">→</span>
+    <span class="step">④ 处置:点「处理」消警还原<br><small>(第7课材质还原思想)</small></span>
+  </div>
+  <p>你会发现：<b>没有新知识点，全是旧零件的新组合</b>——这就是"组装"课的意义，也印证了第 0 课那张三层图。</p>
+
+  <h2>二、核心代码导览（比前几课长，但每段都似曾相识）</h2>
+
+  <h3>① 感知：造一条告警（数据结构设计）</h3>
+  <pre class="code"><code>function spawnAlarm(building, tpl) {
+  const alarm = {
+    id: 序号++,
+    type: tpl.type, level: tpl.level, desc: tpl.desc,   // '消防'/'高'/'烟感报警...'
+    building: building,            // ★ 把"楼"整个对象挂在告警上(而不是只存名字)
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    resolved: false,
+  };
+  // 呈现 + 入列(往下看)
+}</code></pre>
+  <p>设计要点：<b>对象里挂对象</b>（告警挂着楼）。这样后面"定位/处理"时直接 <code>alarm.building</code> 就能拿到坐标和实体，不用来回查表。</p>
+
+  <h3>② 呈现：染红 + 波纹（两行旧代码）</h3>
+  <pre class="code"><code>// 染红:第7课"换皮肤"思想,把原色记在楼身上方便还原
+building._origColor = building.ent.polygon.material;      // 先存原皮肤
+building.ent.polygon.material = Cesium.Color.fromCssColorString('#ef5350').withAlpha(0.85);
+
+// 波纹:第8课配方B,函数化打包成 addPulse(lon, lat),返回 {remove()}
+alarm.pulse = addPulse(...offsetLL(building.dx, building.dy));</code></pre>
+
+  <h3>③④ 定位与处置：一个函数包一件事</h3>
+  <pre class="code"><code>function focusAlarm(alarm) {   // 定位:飞到告警楼
+  viewer.flyTo(alarm.building.ent, {
+    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-55), 260),
+  });
+}
+function resolveAlarm(alarm) { // 处置:消波纹 + 还原楼 + 标记已处理
+  alarm.pulse.remove();
+  alarm.building.ent.polygon.material = alarm.building._origColor;
+  alarm.resolved = true;
+}</code></pre>
+
+  <h3>界面联动：告警列表的按钮怎么"知道"自己对应哪条告警？</h3>
+  <p>网页部分用"事件委托"：列表整体监听点击，从被点按钮的 <code>data-id</code> 属性里查出对应告警——</p>
+  <pre class="code"><code>document.getElementById('alarmList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');            // 点到的是哪个按钮
+  if (!btn) return;
+  const alarm = alarms.find(a => a.id == btn.dataset.id);  // 按编号找告警
+  if (btn.dataset.act === 'focus')   focusAlarm(alarm);
+  if (btn.dataset.act === 'resolve') resolveAlarm(alarm);
+  renderList();                                       // 处理后重新画列表
+});</code></pre>
+
+  <h2>三、"随机告警"怎么来？定时器 + 随机数</h2>
+  <pre class="code"><code>setInterval(() => {                        // 每 8 秒
+  if (未处理告警数 >= 3) return;             // 别堆太多
+  if (Math.random() < 0.6) {                 // 60% 概率
+    const b = BUILDINGS[Math.floor(Math.random() * BUILDINGS.length)]; // 随机挑楼
+    const t = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)]; // 随机挑类型
+    spawnAlarm(b, t);
+  }
+}, 8000);</code></pre>
+  <div class="tip">真实系统里,这个 setInterval 的位置换成 WebSocket 消息回调:
+  <code>socket.onmessage = (e) => spawnAlarm(...)</code>——业务代码一行不改。这就是"接口收敛"的价值。</div>
+
+  <div class="story">真实项目 <code>alarmManager.js</code> 就是本课的满血版:多了告警上限/去重/处理超时自动清理,
+  波纹三圈相位错开、高危红色低危橙色,楼栋染红也分级。答辩演示到"定位→处理"这一幕时,
+  记得停顿一秒让评委看清楼从红变回蓝——这是全场最有"数字孪生味"的瞬间。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>把本课完整搬进你的 <code>my1.html</code>(这是第一次"整功能搬运",遇到报错逐个解决,成长最快)。</li>
+      <li>把告警类型表加一条"燃气",等级"高",描述自己编。</li>
+      <li>挑战:高危告警波纹红色、低危橙色(提示:spawnAlarm 里按 <code>tpl.level</code> 选颜色,传给 addPulse)。</li>
+      <li>思考:如果两条告警落在<b>同一栋楼</b>,处理一条时楼会变回蓝色,另一条还在告——这个 bug 怎么修?
+      (提示:处理时检查这栋楼还有没有未处理告警)</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. "定位"功能用的其实是哪课的知识？</summary>
+    <p>第 2 课的相机 flyTo（套了个 HeadingPitchRange 控制距离和俯角）。</p></details>
+  <details class="quiz"><summary>2. 为什么告警对象里挂整个 building 而不是只存楼名？</summary>
+    <p>直接引用 = 定位/处理时一步到位拿到实体和坐标；存名字还得再查一遍表。对象挂对象是业务代码的基本功。</p></details>
+  <details class="quiz"><summary>3. 接真实告警系统时,哪些代码不用改？</summary>
+    <p>呈现、定位、处置全部不用改（它们只关心"告警对象长什么样"）。只改数据来源：setInterval 换成 WebSocket 回调。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson8.html"><b>上一课</b>第 8 课 · 动画</a>
+    <a href="./lesson10.html"><b>下一课</b>第 10 课 · 面板与实时图表 →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const CAMPUS = { lon: 114.30, lat: 30.50 };
+  function offsetLL(dx, dy) {
+    const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+    const lat = CAMPUS.lat + dy / 111320;
+    return [lon, lat];
+  }
+  const M_LON = 111320 * Math.cos(CAMPUS.lat * Math.PI / 180);
+  const BUILDINGS = [
+    { name: '教学楼A', dx: -60, dy: 40, w: 44, d: 22, floors: 5, color: '#3fbdf2' },
+    { name: '实验楼', dx: 80, dy: 40, w: 40, d: 26, floors: 6, color: '#26c6da' },
+    { name: '图书馆', dx: 0, dy: -30, w: 48, d: 30, floors: 5, color: '#7fd8ff' },
+    { name: '食堂', dx: 60, dy: -60, w: 32, d: 24, floors: 2, color: '#ffb74d' },
+    { name: '学生公寓', dx: -110, dy: -10, w: 16, d: 34, floors: 6, color: '#66bb6a' },
+  ];
+  const TEMPLATES = [
+    { type: '消防', level: '高', desc: '烟感探测器报警,联动排烟启动' },
+    { type: '电气', level: '中', desc: '配电柜温度过高,建议巡检' },
+    { type: '安防', level: '高', desc: '周界红外触发,疑似入侵' },
+    { type: '环境', level: '低', desc: '楼内 PM2.5 超标预警' },
+  ];
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-40, -120), 800),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+
+  /* ---- 盖楼(第5课配方) ---- */
+  for (const b of BUILDINGS) {
+    const [lon, lat] = offsetLL(b.dx, b.dy);
+    const h = b.floors * 3.2, hl = b.w / 2 / M_LON, ht = b.d / 2 / 111320;
+    const ent = viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy([
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat + ht),
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat + ht),
+        ]),
+        height: 0, extrudedHeight: h,
+        material: Cesium.Color.fromCssColorString(b.color).withAlpha(0.8),
+        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.4),
+      },
+    });
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, h + 12),
+      label: { text: b.name, font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+               showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6) },
+    });
+    b.ent = ent;   // 楼对象身上挂实体(对象挂对象!)
+  }
+
+  /* ---- 波纹(第8课配方B,打包成函数) ---- */
+  function ringCanvas() {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const g = cv.getContext('2d');
+    g.strokeStyle = 'white'; g.lineWidth = 7;
+    g.beginPath(); g.arc(64, 64, 55, 0, Math.PI * 2); g.stroke();
+    return cv;
+  }
+  const RING_IMG = ringCanvas();
+  function addPulse(dx, dy) {
+    const bbs = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+    const rings = [];
+    for (let i = 0; i < 3; i++) {
+      rings.push(bbs.add({
+        position: Cesium.Cartesian3.fromDegrees(...offsetLL(dx, dy), 2),
+        image: RING_IMG, sizeInMeters: true, scale: 0.2,
+        color: Cesium.Color.RED.withAlpha(0.6),
+      }));
+    }
+    const onFrame = () => {
+      const now = Date.now();
+      for (let i = 0; i < rings.length; i++) {
+        const f = ((now / 1600) + i / rings.length) % 1;
+        rings[i].scale = (18 + f * 160) / 128;
+        rings[i].color = Cesium.Color.RED.withAlpha(0.6 * (1 - f));
+      }
+    };
+    viewer.scene.preUpdate.addEventListener(onFrame);
+    return { remove() { viewer.scene.preUpdate.removeEventListener(onFrame); viewer.scene.primitives.remove(bbs); } };
+  }
+
+  /* ---- 告警业务 ---- */
+  const alarms = [];
+  let seq = 1;
+
+  function spawnAlarm(b, tpl) {
+    const a = { id: seq++, ...tpl, building: b, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), resolved: false };
+    if (!b._origColor) b._origColor = b.ent.polygon.material;   // 第一次告警才存原色
+    b.ent.polygon.material = Cesium.Color.fromCssColorString('#ef5350').withAlpha(0.85);
+    a.pulse = addPulse(b.dx, b.dy);
+    alarms.unshift(a);
+    renderList();
+  }
+  function focusAlarm(a) {
+    viewer.flyTo(a.building.ent, { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-55), 260) });
+  }
+  function resolveAlarm(a) {
+    if (a.resolved) return;
+    a.resolved = true;
+    a.pulse.remove();
+    // 该楼若没有其他未处理告警,才还原颜色
+    const still = alarms.some(x => !x.resolved && x.building === a.building);
+    if (!still) a.building.ent.polygon.material = a.building._origColor;
+    renderList();
+  }
+  function randomAlarm() {
+    const b = BUILDINGS[Math.floor(Math.random() * BUILDINGS.length)];
+    const t = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)];
+    spawnAlarm(b, t);
+    focusAlarm(alarms[0]);
+  }
+  function resolveAll() { alarms.forEach(a => resolveAlarm(a)); }
+
+  function renderList() {
+    const ul = document.getElementById('alarmList');
+    document.getElementById('alarmCount').textContent = alarms.filter(a => !a.resolved).length;
+    if (!alarms.length) { ul.innerHTML = '<li style="color:#94a3b8;font-size:13px;text-align:center;padding:8px">暂无告警,校园运行正常 ✅</li>'; return; }
+    ul.innerHTML = alarms.map(a => (
+      '<li style="border:1px solid #e2e8f0;border-left:4px solid ' +
+      (a.level === '高' ? '#dc2626' : a.level === '中' ? '#d97706' : '#2563eb') +
+      ';border-radius:8px;padding:8px 10px;font-size:13px;' + (a.resolved ? 'opacity:.45' : '') + '">' +
+      '<b>' + a.type + '</b> <span style="color:#dc2626">[' + a.level + ']</span> ' +
+      '<b style="color:#0891b2">' + a.building.name + '</b> <span style="color:#94a3b8">' + a.time + '</span>' +
+      '<br><span style="color:#64748b">' + a.desc + '</span><br>' +
+      (a.resolved ? '<span style="color:#059669">✔ 已处理</span>' :
+        '<button data-act="focus" data-id="' + a.id + '" style="cursor:pointer;font-size:12px;border:1px solid #cbd5e1;background:#f0f9ff;border-radius:6px;padding:2px 10px">📍 定位</button> ' +
+        '<button data-act="resolve" data-id="' + a.id + '" style="cursor:pointer;font-size:12px;border:1px solid #a7f3d0;background:#ecfdf5;border-radius:6px;padding:2px 10px">✔ 处理</button>') +
+      '</li>'
+    )).join('');
+  }
+
+  document.getElementById('alarmList').addEventListener('click', function (e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const a = alarms.find(x => x.id == btn.dataset.id);
+    if (!a) return;
+    if (btn.dataset.act === 'focus') focusAlarm(a);
+    if (btn.dataset.act === 'resolve') resolveAlarm(a);
+  });
+
+  renderList();
+  // 开场 3 秒来一条演示告警;之后每 8 秒可能随机来一条
+  setTimeout(() => spawnAlarm(BUILDINGS[2], TEMPLATES[1]), 3000);
+  setInterval(() => {
+    if (alarms.filter(a => !a.resolved).length >= 3) return;
+    if (Math.random() < 0.6) {
+      spawnAlarm(BUILDINGS[Math.floor(Math.random() * BUILDINGS.length)],
+                 TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)]);
+    }
+  }, 8000);
+</script>
+</body>
+</html>

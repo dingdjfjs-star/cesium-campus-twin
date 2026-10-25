@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf8"><title>SMOKE</title>
+<link href="./cesium/Widgets/widgets.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL='./cesium/';</script><script src="./cesium/Cesium.js"></script>
+<style>html,body,#c{width:100%;height:100%;margin:0}body{background:#333}</style></head>
+<body><div id="c"></div>
+<div id="msg" style="position:fixed;top:4px;left:8px;color:#0f0;font:14px monospace;z-index:9;background:rgba(0,0,0,.6);padding:2px 6px"></div>
+<script>
+const msg=document.getElementById('msg');
+window.onerror=(m,s,l)=>{msg.textContent='PAGE-ERR '+m+' @'+l; return false;};
+const v=new Cesium.Viewer('c',{baseLayer:false});
+v.scene.globe.baseColor=Cesium.Color.fromCssColorString('#123a5e');
+v.scene.debugShowFramesPerSecond=true;
+v.entities.add({position:Cesium.Cartesian3.fromDegrees(116.39,39.9,5000),
+  box:{dimensions:new Cesium.Cartesian3(2000,2000,2000),material:Cesium.Color.RED}});
+v.entities.add({position:Cesium.Cartesian3.fromDegrees(116.39,39.9,12000),
+  label:{text:'HELLO',font:'32px sans-serif',fillColor:Cesium.Color.YELLOW,disableDepthTestDistance:1e7}});
+v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(116.42,39.87,15000),
+  orientation:{heading:0,pitch:Cesium.Math.toRadians(-35),roll:0}});
+msg.textContent='ok ver='+Cesium.VERSION;
+setInterval(()=>{try{msg.textContent='ok h='+Math.round(v.camera.positionCartographic.height)+' ent='+v.entities.values.length;}catch(e){msg.textContent='tick-err '+e.message;}},1000);
+</script></body></html>

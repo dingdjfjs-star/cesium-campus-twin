@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 4 课 · 画出第一栋楼 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson3.html">← 上一课</a>
+  <span class="crs">第 4 课 · 画出第一栋楼（多边形拉伸）</span>
+  <a href="./lesson5.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 4 课：画出第一栋楼——"平地拔起"的魔法</h1>
+  <p class="lead">盒子是"悬浮的箱子"，楼应该"从地里长出来"。这课学数字孪生里最核心的建模手法：<b>画楼底 → 向上拉伸</b>。</p>
+
+  <h2>先看效果 👇</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run" onclick="build(64, 0.8)">🏢 盖一栋 20 层楼(64米)</button>
+      <button class="run" onclick="build(96, 0.8)">🏨 加高到 30 层(96米)</button>
+      <button class="run" onclick="build(32, 0.5)">🏠 矮楼 10 层(32米·半透明)</button>
+      <button class="run" onclick="wide()">↔️ 把楼加宽一倍</button>
+      <button class="run warn" onclick="viewer.entities.removeAll()"> demolish 🏗</button>
+      <span class="note">注意观察:楼是从地面"长"出来的,不像盒子那样悬空</span>
+    </div>
+  </section>
+
+  <h2>一、思路：先画"脚印"，再向上拉</h2>
+  <p>真实世界的楼 = 一个矩形脚印 × 向上延伸的高度。Cesium 完美复刻这个过程：</p>
+  <div class="flow">
+    <span class="step">① polygon 画脚印(平面多边形)</span><span class="arr">→</span>
+    <span class="step">② extrudedHeight 指定拉伸到的海拔</span><span class="arr">→</span>
+    <span class="step">③ 楼成!</span>
+  </div>
+
+  <h2>二、代码与逐行解读</h2>
+  <pre class="code"><code>// 教学区用的楼:中心(114.30, 30.50), 东西向60米 × 南北向40米
+const C0 = [114.30, 30.50];
+const halfLon = 0.00031;  // 30米换算成的经度(怎么算的?往下看"米与度的换算")
+const halfLat = 0.00036;  // 20米换算成的纬度
+
+// 四个角:左下 → 右下 → 右上 → 左上(顺时针绕一圈)
+const corners = [
+  Cesium.Cartesian3.fromDegrees(C0[0] - halfLon, C0[1] - halfLat),
+  Cesium.Cartesian3.fromDegrees(C0[0] + halfLon, C0[1] - halfLat),
+  Cesium.Cartesian3.fromDegrees(C0[0] + halfLon, C0[1] + halfLat),
+  Cesium.Cartesian3.fromDegrees(C0[0] - halfLon, C0[1] + halfLat),
+];
+
+viewer.entities.add({
+  polygon: {
+    hierarchy: new Cesium.PolygonHierarchy(corners), // 脚印:一圈点
+    height: 0,                // 脚印放在海拔 0 米(地面)
+    extrudedHeight: 64,       // 拉伸到海拔 64 米 → 楼高 64 米
+    material: Cesium.Color.fromCssColorString('#3fbdf2').withAlpha(0.8),
+    outline: true,            // 描边更清晰
+    outlineColor: Cesium.Color.WHITE.withAlpha(0.5),
+  },
+});</code></pre>
+  <ol class="lineseq">
+    <li><code>hierarchy</code> 直译"层级"，这里就当"<b>围栏</b>"理解：把一圈点按顺序连起来围出地块。至少 3 个点，本课用 4 个点围出矩形。</li>
+    <li><code>height: 0</code> —— 脚印本身的海拔。普通平地放 0 就行（真实项目放 1 左右，避免和地面"打架"闪烁）。</li>
+    <li><code>extrudedHeight: 64</code> —— <b>本课主角</b>：把平面脚印向上"挤出"到这个海拔。64 米 ≈ 20 层楼（层高按 3.2 米算：20 × 3.2 = 64）。</li>
+    <li><code>fromCssColorString('#3fbdf2')</code> —— 用网页通用的颜色写法（#开头的十六进制）指定颜色，比 <code>Cesium.Color.RED</code> 这种预定义色自由得多。取色器搜"hex color"随便挑。</li>
+    <li><code>outline</code> —— 白色描边让楼在深色地球上更精神，科技感就是这么来的。</li>
+  </ol>
+
+  <h2>三、米与度的换算（本课唯一的数学，两行记住）</h2>
+  <p>上面出现 <code>halfLon = 0.00031</code> 这种别扭写法，是因为 hierarchy 的点必须是<b>经纬度</b>，而人类说"楼宽 60 米"。换算口诀：</p>
+  <table class="tbl">
+    <tr><th>方向</th><th>换算</th><th>30 米在该方向 ≈</th></tr>
+    <tr><td>南北(纬度)</td><td>1° 纬度 ≈ 111320 米（任何地方都一样）</td><td>30 ÷ 111320 ≈ 0.00027°</td></tr>
+    <tr><td>东西(经度)</td><td>1° 经度 ≈ 111320 × cos(纬度) 米（越往两极越短）</td><td>北纬30.5°: 30 ÷ 95300 ≈ 0.00031°</td></tr>
+  </table>
+  <div class="warn">每次都手算太痛苦了！真实项目写了个换算函数 <code>offsetLL(dx, dy)</code>
+  （"向东 dx 米、向北 dy 米，换算成经纬度"），从此只写米不写度——下一课它就是主角。</div>
+
+  <h2>四、层高小知识（答辩用得上）</h2>
+  <p>建筑层高通常 2.8~4.5 米，教学楼/宿舍按 <b>3.2 米</b>估算很稳。所以：</p>
+  <pre class="code"><code>楼高(米) = 层数 × 3.2
+// 6层宿舍 = 19.2米   20层 = 64米   30层 = 96米</code></pre>
+  <p>数字孪生场景里楼高不必和现实分毫不差，<b>比例正确</b>（教学楼矮、图书馆中、宿舍群齐高）比精确更重要——评委看的是整体气质。</p>
+
+  <div class="story">真实项目里每栋楼 = 本课的拉伸体 + 一块同形状的"屋顶盖板"(亮色 polygon 放在楼顶高度,远看像发光楼顶)
+  + 一个头顶 label。打开 <code>sceneObjects.js</code> 搜 <code>extrudedHeight</code> 就能看到一模一样的写法,
+  只是四角由 <code>rectCorners()</code> 函数算出(它还能旋转楼的角度)。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>在你的 <code>my1.html</code> 里,在你学校坐标上盖一栋"教学楼":60×25 米、5 层、你喜欢的颜色,加上描边和标签。</li>
+      <li>再紧挨着盖第二栋(把坐标整体向北移 40 米,纬度 +0.00036),组成一个小院落。</li>
+      <li>挑战:把 <code>extrudedHeight</code> 改成 0 试试——看到的"一片纸"会让你永远记住这个参数是干嘛的。</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 想盖 12 层楼，extrudedHeight 该写多少？</summary>
+    <p>12 × 3.2 ≈ 38.4，写 38 或 39 都行。</p></details>
+  <details class="quiz"><summary>2. hierarchy 里 4 个点的顺序重要吗？</summary>
+    <p>重要。要<b>按顺序绕一圈</b>（顺时针或逆时针都行），如果乱序（比如画成蝴蝶交叉），多边形会扭成奇怪的形状。</p></details>
+  <details class="quiz"><summary>3. 30 米在"东西方向"和"南北方向"换算成度，哪个大？</summary>
+    <p>东西方向的度数更大（因为经度圈越往极地越小，一度装的米数少，同样的米数就要更多的度）。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson3.html"><b>上一课</b>第 3 课 · 实体</a>
+    <a href="./lesson5.html"><b>下一课</b>第 5 课 · 数据驱动：一片楼 →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const C0 = [114.30, 30.50];
+  let halfLon = 0.00031, halfLat = 0.00036;
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(C0[0] - 0.001, C0[1] - 0.003, 800),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+  });
+
+  function build(height, alpha) {
+    const corners = [
+      Cesium.Cartesian3.fromDegrees(C0[0] - halfLon, C0[1] - halfLat),
+      Cesium.Cartesian3.fromDegrees(C0[0] + halfLon, C0[1] - halfLat),
+      Cesium.Cartesian3.fromDegrees(C0[0] + halfLon, C0[1] + halfLat),
+      Cesium.Cartesian3.fromDegrees(C0[0] - halfLon, C0[1] + halfLat),
+    ];
+    // 实体一:楼本体(拉伸体)
+    viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy(corners),
+        height: 0,
+        extrudedHeight: height,
+        material: Cesium.Color.fromCssColorString('#3fbdf2').withAlpha(alpha),
+        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.5),
+      },
+    });
+    // 实体二:楼顶标签(单独一个实体,更好控制)
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(C0[0], C0[1], height + 15),
+      label: {
+        text: height + 'm ≈ ' + Math.round(height / 3.2) + ' 层',
+        font: '15px sans-serif', fillColor: Cesium.Color.fromCssColorString('#9be1ff'),
+        showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.55),
+      },
+    });
+  }
+  function wide() { halfLon *= 2; halfLat *= 2; build(64, 0.8); }
+</script>
+</body>
+</html>

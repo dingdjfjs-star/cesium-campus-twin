@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cesium 数字孪生入门 · 课程目录</title>
+<link href="./common.css" rel="stylesheet">
+<style>
+  .hero{background:linear-gradient(135deg,#0f172a,#134e63);color:#e0f2fe;border-radius:14px;padding:30px 28px;margin:26px 0}
+  .hero h1{font-size:28px;margin:0 0 6px}
+  .hero p{margin:4px 0;color:#a5f3fc;font-size:15px}
+  ul.lessons{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+  ul.lessons a{display:flex;gap:12px;align-items:flex-start;text-decoration:none;background:#fff;border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;color:var(--ink);transition:.15s;position:relative}
+  ul.lessons a:hover{border-color:var(--cyan);box-shadow:0 6px 18px rgba(6,182,212,.15)}
+  ul.lessons .no{flex:none;width:34px;height:34px;border-radius:10px;background:#0f172a;color:#67e8f9;display:flex;
+    align-items:center;justify-content:center;font-weight:700;font-size:15px}
+  ul.lessons b{font-size:15px}
+  ul.lessons small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  ul.lessons .done{position:absolute;top:10px;right:12px;font-size:11px;color:#059669;display:none}
+  ul.lessons li.fin a{border-style:dashed;background:#f8fafc}
+  ol.prep{font-size:15px}
+</style>
+</head>
+<body>
+<header class="site">
+  <a href="/">🏠 项目演示</a>
+  <span class="crs">Cesium 数字孪生入门课程</span>
+  <a href="./lesson0.html">从第 0 课开始 →</a>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Cesium 数字孪生入门（零基础版）</h1>
+    <p>12 节课 · 每课 15–30 分钟 · 边看边玩 · 学完能独立做出答辩级三维校园</p>
+    <p>教材就是你电脑里的真实项目 <code style="background:#0b1322;color:#a5f3fc">E:\zcode\cesium-campus-twin</code></p>
+  </div>
+
+  <h2>上课前的准备（只需做一次）</h2>
+  <ol class="prep">
+    <li><b>确认"放映机"开着</b>：整个课程依赖本地服务器。如果浏览器打开课程页是白屏/报错，
+      打开命令行（<span class="kbd">Win</span>+<span class="kbd">R</span> 输入 <code>cmd</code> 回车），执行：
+      <pre class="code">cd E:\zcode\cesium-campus-twin
+npm run dev</pre>
+      看到 <code>Local: http://localhost:5173/</code> 就说明开机了，浏览器访问
+      <code>http://localhost:5173/lessons/index.html</code>（本页）。</li>
+    <li><b>装一个代码编辑器</b>（推荐 VSCode，免费）：所有课程文件都在
+      <code>public\lessons\</code> 文件夹里，用编辑器打开就能改。改完保存，浏览器 <span class="kbd">F5</span> 刷新看效果。</li>
+    <li><b>学会一件救命技能</b>：页面不对劲时按 <span class="kbd">F12</span> 打开开发者工具，切到"Console（控制台）"，
+      红色的字就是错误原因——把第一行红字复制去问 AI，能解决 90% 的问题。</li>
+    <li><b>学习节奏</b>：一天 1–2 课，每课的【动手作业】必须亲手做完再进下一课。课程页顶部的
+      ✅ 会自动记住你学到哪了。</li>
+  </ol>
+
+  <h2>课程表</h2>
+  <ul class="lessons" id="list">
+    <li><a href="./lesson0.html" data-n="0"><span class="no">0</span><span><b>数字孪生是什么</b><small>概念课 · 不用写代码，看懂三层结构</small></span></a></li>
+    <li><a href="./lesson1.html" data-n="1"><span class="no">1</span><span><b>看到你的第一个地球</b><small>8 行代码跑起来 + 学会鼠标开飞机</small></span></a></li>
+    <li><a href="./lesson2.html" data-n="2"><span class="no">2</span><span><b>坐标与相机</b><small>经纬度是什么 · flyTo 瞬移全世界</small></span></a></li>
+    <li><a href="./lesson3.html" data-n="3"><span class="no">3</span><span><b>实体：往地球上放东西</b><small>点 · 盒子 · 文字标签</small></span></a></li>
+    <li><a href="./lesson4.html" data-n="4"><span class="no">4</span><span><b>画出第一栋楼</b><small>多边形拉伸 extrudedHeight</small></span></a></li>
+    <li><a href="./lesson5.html" data-n="5"><span class="no">5</span><span><b>数据驱动：一片楼</b><small>最重要的架构思想（换学校只改一张表）</small></span></a></li>
+    <li><a href="./lesson6.html" data-n="6"><span class="no">6</span><span><b>道路、水面与绿化</b><small>corridor 走廊 · ellipse 椭圆</small></span></a></li>
+    <li><a href="./lesson7.html" data-n="7"><span class="no">7</span><span><b>让场景能"点"</b><small>鼠标拾取 · 信息卡 · 高亮</small></span></a></li>
+    <li><a href="./lesson8.html" data-n="8"><span class="no">8</span><span><b>动画：让场景活起来</b><small>每帧更新 + 三个必须绕开的坑</small></span></a></li>
+    <li><a href="./lesson9.html" data-n="9"><span class="no">9</span><span><b>告警闭环（高潮课）</b><small>波纹 → 染红 → 定位 → 处理</small></span></a></li>
+    <li><a href="./lesson10.html" data-n="10"><span class="no">10</span><span><b>面板与实时图表</b><small>ECharts 曲线 · 模拟数据流</small></span></a></li>
+    <li class="fin"><a href="./lesson11.html" data-n="11"><span class="no">11</span><span><b>组装与答辩</b><small>把一切拼起来 · 毕业作业</small></span></a></li>
+  </ul>
+
+  <div class="tip">学完想看"满血版"成品？课程里每个效果，真实项目里都有对应的完整实现，
+  最后一课会给你一张"课程 ↔ 项目文件"对照地图。</div>
+</main>
+
+<script>
+  // 勾选记忆:点课程链接即标记"已学"
+  document.querySelectorAll('#list a').forEach(a=>{
+    const n=a.dataset.n;
+    a.addEventListener('click',()=>localStorage.setItem('les-done-'+n,'1'));
+    if(localStorage.getItem('les-done-'+n)){
+      const s=document.createElement('span');s.className='done';s.textContent='✅ 已学';a.appendChild(s);
+    }
+  });
+</script>
+</body>
+</html>

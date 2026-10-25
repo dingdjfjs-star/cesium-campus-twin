@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 2 课 · 坐标与相机 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson1.html">← 上一课</a>
+  <span class="crs">第 2 课 · 坐标与相机</span>
+  <a href="./lesson3.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 2 课：坐标与相机——给地球上的点"定位"</h1>
+  <p class="lead">三维世界的第一门外语：经纬度。学完这课，你能让相机飞到地球上任何地点，还懂了"高度"这个第三维度。</p>
+
+  <h2>先玩一玩：输入坐标，飞过去 👇</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <input class="run" id="inLon" value="114.9347" title="经度">
+      <input class="run" id="inLat" value="25.8310" title="纬度">
+      <input class="run" id="inH" value="3000" title="高度(米)" style="width:80px">
+      <button class="run" onclick="flyInput()">🛫 飞过去</button>
+      <button class="run" onclick="demoPitch()">🎬 斜着看(俯仰角对比)</button>
+      <span class="note">左边输入框：经度 / 纬度 / 高度米。试着只改高度 3000 → 300 → 30000，感受"米"</span>
+    </div>
+  </section>
+
+  <h2>一、经纬度：地球的门牌号</h2>
+  <p>想象给地球<b>横着画一圈圈线（纬度）</b>、<b>竖着画一圈圈线（经度）</b>，任何地点都是"某横线与某竖线的交点"：</p>
+  <table class="tbl">
+    <tr><th></th><th>经度 lon</th><th>纬度 lat</th></tr>
+    <tr><td>方向</td><td>东西方向（本初子午线=0°，向东为正）</td><td>南北方向（赤道=0°，向北为正）</td></tr>
+    <tr><td>范围</td><td>−180° ~ +180°（东经为正，西经为负）</td><td>−90° ~ +90°（北纬为正，南纬为负）</td></tr>
+    <tr><td>中国典型值</td><td>约 73° ~ 135°（北京 116.4）</td><td>约 18° ~ 53°（北京 39.9）</td></tr>
+  </table>
+  <div class="tip">精度速记：<b>小数点后第 5 位 ≈ 1 米</b>。所以写坐标时保留 5 位小数就够精确了，
+  比如 <code>116.39120, 39.90750</code>。只有前 2 位（如 116.39）的话会差出好几公里。</div>
+
+  <h2>二、第三维度：高度（米）</h2>
+  <p>经纬度定"平面位置"，<b>高度定"离地多少米"</b>，三者合起来才是三维空间里的一个点。Cesium 的标准写法（务必背下来）：</p>
+  <pre class="code"><code>Cesium.Cartesian3.fromDegrees(经度, 纬度, 高度米)
+// 例:天安门上空 2000 米
+Cesium.Cartesian3.fromDegrees(116.3912, 39.9075, 2000)</code></pre>
+  <ol class="lineseq">
+    <li><code>Cartesian3</code> 直译"笛卡尔坐标"，是引擎内部的坐标格式（三个数字 x/y/z）。<b>你不用理解内部原理</b>，只要知道 <code>fromDegrees</code> 是"翻译官"，把人类友好的经纬度翻译给它。</li>
+    <li>三个参数顺序固定：<b>经度在前，纬度在后</b>——新手最常犯的错就是写反，写反了会飞到地球另一边（对称点），出现"我明明想去北京却在南美"的灵异事件。</li>
+    <li>高度不写默认 0（贴地）。相机高度就是"你站在多高往下看"。</li>
+  </ol>
+
+  <h2>三、setView 瞬移 vs flyTo 飞行</h2>
+  <pre class="code"><code>// 瞬移:0 秒到达,页面一打开就在这(适合"初始视角")
+viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(116.39, 39.9, 5000) });
+
+// 飞行:默认约 3 秒平滑飞达(适合"演示动作",电影感)
+viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(116.39, 39.9, 5000) });</code></pre>
+  <table class="tbl">
+    <tr><th>场景</th><th>用哪个</th></tr>
+    <tr><td>页面加载后的初始位置</td><td><code>setView</code>（用户不该看见"起飞过程"）</td></tr>
+    <tr><td>点按钮"飞到某楼"</td><td><code>flyTo</code>（让评委看到镜头移动 = 高级感）</td></tr>
+    <tr><td>开场大动画(从太空俯冲进校园)</td><td>先 <code>setView</code> 到太空,再延时 <code>flyTo</code> 冲下来(真实项目就这么干的)</td></tr>
+  </table>
+
+  <h2>四、朝向三兄弟：heading / pitch / roll（了解即可）</h2>
+  <p><code>flyTo</code> 的第二个参数 <code>orientation</code>（朝向）里有三个角度，用"开飞机"比喻：</p>
+  <table class="tbl">
+    <tr><th>参数</th><th>比喻</th><td>常用值</th></tr>
+    <tr><td><code>heading</code></td><td>摇头(朝哪个方向看,0=北,90=东)</td><td>0°</td></tr>
+    <tr><td><code>pitch</code></td><td><b>点头(低头俯视还是平视)</b></td><td>−90°=正俯视,−45°=斜视(最常用)</td></tr>
+    <tr><td><code>roll</code></td><td>歪头(一般不用)</td><td>0°</td></tr>
+  </table>
+  <p>演示区"斜着看"按钮的代码：</p>
+  <pre class="code"><code>viewer.camera.flyTo({
+  destination: Cesium.Cartesian3.fromDegrees(114.9347, 25.7810, 2500),
+  orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 } // -45° 斜着看城市
+});</code></pre>
+  <div class="warn">角度单位陷阱：Cesium 内部用<b>弧度</b>，你脑子里想的是<b>度</b>。中间用
+  <code>Cesium.Math.toRadians(度数)</code> 换算，忘写它是最常见的"为什么我的 -45° 没反应"的原因。</div>
+
+  <h2>五、怎么查一个地方的坐标？</h2>
+  <ol>
+    <li><b>高德坐标拾取器</b>：搜索"高德地图坐标拾取器"（lbs.amap.com/tools/picker），找到地点，页面上就显示坐标，复制过来用。</li>
+    <li>注意高德/百度用自家加密坐标（GCJ02/BD09），和 Cesium 用的 WGS84 会有几百米偏移——<b>教学和城市级演示无感</b>，要做到楼级精准需用 WGS84 坐标源（如天地图）。</li>
+    <li>懒得查？演示页输入框里已预填了一组中国南方城市坐标，直接点"飞过去"。</li>
+  </ol>
+
+  <div class="story">真实项目里,校园原点写在 <code>campusData.js</code> 的 <code>CAMPUS = { lon: 114.30, lat: 30.50 }</code>,
+  想把整座校园搬到任何真实地点,改这两个数字即可——第 5 课会看到为什么一个点能撬动整座校园。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>用高德拾取器查出<b>你学校</b>的坐标，填进演示页输入框，点"飞过去"，从 3000 米、1000 米、500 米三个高度各看一眼。</li>
+      <li>在你的 <code>my1.html</code> 里加一个按钮：先 <code>setView</code> 到 50000 米太空，停 1 秒后 <code>flyTo</code> 俯冲到 2000 米（提示：<code>setTimeout(()=>{...},1000)</code>）。</li>
+      <li>挑战：把经纬度<b>故意写反</b>，飞过去看看自己到了地球哪儿（再用高德查查那是哪国）。</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. <code>fromDegrees(39.9, 116.39, 1000)</code> 错在哪？</summary>
+    <p>经纬度写反了。正确顺序是 (经度, 纬度, 高度)，应为 <code>fromDegrees(116.39, 39.9, 1000)</code>。</p></details>
+  <details class="quiz"><summary>2. 想要"打开页面瞬间就在校园上空 45° 斜视"，用 setView 还是 flyTo？</summary>
+    <p>setView（瞬移）。flyTo 会让你看见起飞过程，初始视角一般不想要这个。</p></details>
+  <details class="quiz"><summary>3. 高度 100 和 10000 的区别，用你的话讲是什么？</summary>
+    <p>100 米≈30 层楼楼顶视角（能看清一栋楼），10000 米≈民航巡航高度（能看清一座城）。数字的单位永远是米。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson1.html"><b>上一课</b>第 1 课 · 第一个地球</a>
+    <a href="./lesson3.html"><b>下一课</b>第 3 课 · 实体：往地球上放东西 →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(114.9347, 25.8310, 6000),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+
+  function flyInput() {
+    const lon = parseFloat(document.getElementById('inLon').value);
+    const lat = parseFloat(document.getElementById('inLat').value);
+    const h = parseFloat(document.getElementById('inH').value) || 3000;
+    if (isNaN(lon) || isNaN(lat)) { alert('坐标格式不对，应该是数字，如 114.9347'); return; }
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, h) });
+  }
+  function demoPitch() {
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(114.9347, 25.7710, 2500),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 },
+    });
+  }
+</script>
+</body>
+</html>

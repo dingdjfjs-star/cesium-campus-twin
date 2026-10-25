@@ -1,0 +1,246 @@
+<!doctype html><html><head><meta charset="utf8"><title>BISECT</title>
+<link href="./cesium/Widgets/widgets.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL='./cesium/';</script><script src="./cesium/Cesium.js"></script>
+<style>html,body,#c{width:100%;height:100%;margin:0}body{background:#333}</style></head>
+<body><div id="c"></div>
+<div id="msg" style="position:fixed;top:4px;left:8px;color:#0f0;font:14px monospace;z-index:9;background:rgba(0,0,0,.6);padding:2px 6px"></div>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const msg = document.getElementById('msg');
+window.onerror = (m) => { msg.textContent = 'PAGE-ERR ' + m; return false; };
+
+const { createScene } = await import('/src/createScene.js');
+const { createCampus } = await import('/src/sceneObjects.js');
+const { createPatrols } = await import('/src/patrol.js');
+const { addRadarSweep, addPulseRings } = await import('/src/effects.js');
+const { offsetLL } = await import('/src/campusData.js');
+
+if (q.has('nolighting')) { // 干掉光照设置
+  const orig = createScene;
+}
+const viewer = createScene(document.getElementById('c'));
+if (q.has('nolighting')) viewer.scene.globe.enableLighting = false;
+if (q.has('nofog')) { viewer.scene.fog.enabled = false; }
+if (q.has('anim')) viewer.clock.shouldAnimate = true;
+viewer.scene.renderError.addEventListener((s, e) => {
+  document.getElementById('msg').style.color = '#f55';
+  document.getElementById('msg').textContent = 'RENDER-ERR: ' + (e && e.message ? e.message : e);
+});
+
+let groups = null;
+if (!q.has('nocampus')) groups = createCampus(viewer);
+
+// 简单参照物:一个红盒子 + 一个标签(不依赖业务数据)
+viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(...offsetLL(0, 0), 3000),
+  box: { dimensions: new Cesium.Cartesian3(300, 300, 300), material: Cesium.Color.RED },
+});
+viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(...offsetLL(0, 0), 6000),
+  label: { text: 'REF', font: '28px sans-serif', fillColor: Cesium.Color.YELLOW, disableDepthTestDistance: 1e7 },
+});
+
+viewer.camera.setView({
+  destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-260, -420), 1600),
+  orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+});
+
+if (q.has('orbit')) {
+  viewer.scene.preRender.addEventListener(() => viewer.camera.rotateRight(0.0006));
+}
+if (q.has('spin')) { // 绕地球 Z 轴缓慢旋转(替代 rotateRight 的候选方案)
+  viewer.scene.preUpdate.addEventListener(() => viewer.camera.rotate(Cesium.Cartesian3.UNIT_Z, -0.0006));
+}
+
+if (q.has('bbfx')) { // 全套"已验证积木"特效:billboard 波纹/扫掠 + LabelCollection + 移动盒子
+  const [blon, blat] = offsetLL(0, 0);
+  const center = Cesium.Cartesian3.fromDegrees(blon, blat);
+
+  // 1) 环形贴图(扩散波纹)
+  function ringCanvas() {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const g = cv.getContext('2d');
+    g.strokeStyle = 'rgba(255,82,82,1)'; g.lineWidth = 6;
+    g.beginPath(); g.arc(64, 64, 56, 0, Math.PI * 2); g.stroke();
+    return cv;
+  }
+  // 2) 楔形贴图(雷达扫掠)
+  function wedgeCanvas() {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+    const g = cv.getContext('2d');
+    const grad = g.createRadialGradient(0, 0, 0, 0, 0, 256);
+    grad.addColorStop(0, 'rgba(0,229,255,0.55)');
+    grad.addColorStop(1, 'rgba(0,229,255,0)');
+    g.fillStyle = grad;
+    g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 256, -0.5, 0); g.closePath(); g.fill();
+    return cv;
+  }
+  const billboards = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+  const rings = [];
+  for (let i = 0; i < 3; i++) {
+    rings.push(billboards.add({
+      position: center, image: ringCanvas(), scale: 0.2,
+      color: new Cesium.Color(1, 1, 1, 0.6), heightReference: Cesium.HeightReference.NONE,
+    }));
+  }
+  const sweep = billboards.add({ position: center, image: wedgeCanvas(), scale: 1.6 });
+
+  // 3) LabelCollection 位置逐帧更新
+  const labels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+  const lab = labels.add({
+    position: center, text: '巡逻车 01', font: '13px sans-serif',
+    fillColor: Cesium.Color.YELLOW, showBackground: true,
+    backgroundColor: new Cesium.Color(0.04, 0.16, 0.27, 0.7),
+  });
+
+  // 4) 移动盒子(已验证方案)
+  const box = viewer.scene.primitives.add(new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: Cesium.BoxGeometry.fromDimensions({
+        dimensions: new Cesium.Cartesian3(30, 14, 10),
+        vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+      }),
+      attribute: Cesium.ColorGeometryInstanceAttribute.fromColor(
+        Cesium.Color.fromCssColorString('#ffca28')
+      ),
+    }),
+    appearance: new Cesium.PerInstanceColorAppearance({ closed: true, translucent: false }),
+    asynchronous: true,
+  }));
+  const hpr = new Cesium.HeadingPitchRoll(0, 0, 0);
+
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-260, -420), 1600),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+  });
+
+  viewer.scene.preUpdate.addEventListener(() => {
+    const now = Date.now();
+    // 波纹:扩散 + 渐隐
+    for (let i = 0; i < 3; i++) {
+      const f = ((now / 1600) + i / 3) % 1;
+      rings[i].scale = (0.3 + f * 2.2);
+      rings[i].color = new Cesium.Color(1, 1, 1, 0.55 * (1 - f));
+    }
+    // 扫掠:billboard.rotation 逆时针
+    sweep.rotation = (now / 1000) * 0.9;
+    // 盒子绕校园中心转圈 + 标签跟随
+    const a = (now / 1000) * 0.5;
+    const [mlon, mlat] = offsetLL(Math.sin(a) * 120, Math.cos(a) * 120);
+    const pos = Cesium.Cartesian3.fromDegrees(mlon, mlat, 6);
+    hpr.heading = a;
+    box.modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr);
+    lab.position = Cesium.Cartesian3.fromDegrees(mlon, mlat, 16);
+  });
+}
+
+if (q.has('litcircle')) { // lit 外观(非 flat)+ 每帧缩放矩阵
+  const [blon, blat] = offsetLL(0, 0);
+  const center = Cesium.Cartesian3.fromDegrees(blon, blat);
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+  const enuInv = Cesium.Matrix4.inverse(enu, new Cesium.Matrix4());
+  const prim = viewer.scene.primitives.add(new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: new Cesium.CircleGeometry({ center, radius: 150, height: 3 }),
+      attribute: Cesium.ColorGeometryInstanceAttribute.fromColor(
+        Cesium.Color.fromCssColorString('#ff5252').withAlpha(0.4)
+      ),
+    }),
+    appearance: new Cesium.PerInstanceColorAppearance({ translucent: true }),
+    asynchronous: true,
+  }));
+  const local = new Cesium.Matrix4(), tmp = new Cesium.Matrix4();
+  viewer.scene.preUpdate.addEventListener(() => {
+    if (!prim.ready) return;
+    const f = (Date.now() / 1600) % 1;
+    Cesium.Matrix4.fromScale(new Cesium.Cartesian3(0.3 + f, 0.3 + f, 1), local);
+    Cesium.Matrix4.multiply(enu, local, tmp);
+    Cesium.Matrix4.multiply(tmp, enuInv, prim.modelMatrix);
+  });
+}
+
+if (q.has('transcircle') || q.has('opcircle')) { // 静态圆图元,无动画;唯一变量是 translucent
+  const [blon, blat] = offsetLL(0, 0);
+  const center = Cesium.Cartesian3.fromDegrees(blon, blat);
+  const translucent = q.has('transcircle');
+  viewer.scene.primitives.add(new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: new Cesium.CircleGeometry({ center, radius: 150, height: 3 }),
+      attribute: Cesium.ColorGeometryInstanceAttribute.fromColor(
+        Cesium.Color.fromCssColorString('#ff5252').withAlpha(translucent ? 0.3 : 1)
+      ),
+    }),
+    appearance: new Cesium.PerInstanceColorAppearance({ flat: true, translucent }),
+    asynchronous: true,
+  }));
+}
+
+if (q.has('primbox')) { // Primitive + 每帧 modelMatrix 旋转(不走 Entity 动态管线)
+  const [blon, blat] = offsetLL(0, 0);
+  const center = Cesium.Cartesian3.fromDegrees(blon, blat);
+  const prim = viewer.scene.primitives.add(new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: Cesium.BoxGeometry.fromDimensions({ dimensions: new Cesium.Cartesian3(120, 60, 60) }),
+      modelMatrix: Cesium.Matrix4.IDENTITY,
+      attribute: new Cesium.ColorGeometryInstanceAttribute(1, 0.4, 0.1, 1),
+    }),
+    appearance: new Cesium.PerInstanceColorAppearance({ closed: true, translucent: false }),
+    asynchronous: true,
+  }));
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+  const enuInv = Cesium.Matrix4.inverse(enu, new Cesium.Matrix4());
+  const rot4 = new Cesium.Matrix4();
+  const t1 = new Cesium.Matrix4();
+  viewer.scene.preUpdate.addEventListener(() => {
+    const th = (Date.now() / 1000) * 0.8;
+    Cesium.Matrix4.fromRotationTranslation(Cesium.Matrix3.fromRotationZ(th), Cesium.Cartesian3.ZERO, rot4);
+    Cesium.Matrix4.multiply(enu, rot4, t1);
+    Cesium.Matrix4.multiply(t1, enuInv, prim.modelMatrix);
+  });
+}
+
+if (q.has('patrol')) createPatrols(viewer);
+if (q.has('dash')) { // 只有虚线路线,没有移动体
+  viewer.entities.add({
+    polyline: {
+      positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+        ...offsetLL(-168, -118), 1.4, ...offsetLL(168, -118), 1.4,
+        ...offsetLL(168, 118), 1.4, ...offsetLL(-168, 118), 1.4, ...offsetLL(-168, -118), 1.4,
+      ]),
+      width: 2,
+      material: new Cesium.PolylineDashMaterialProperty({
+        color: Cesium.Color.fromCssColorString('#ffca28'),
+        dashLength: 14,
+      }),
+    },
+  });
+}
+if (q.has('mover')) { // 单个移动盒子:CallbackProperty 位置 + 朝向
+  const p = new Cesium.CallbackProperty(
+    () => Cesium.Cartesian3.fromDegrees(...offsetLL(Math.sin(Date.now() / 2000) * 80, 0), 200), false
+  );
+  viewer.entities.add({
+    position: p,
+    orientation: new Cesium.CallbackProperty(
+      () => Cesium.Transforms.headingPitchRollQuaternion(
+        p.getValue(), new Cesium.HeadingPitchRoll(0, 0, 0)
+      ), false
+    ),
+    box: { dimensions: new Cesium.Cartesian3(50, 20, 20), material: Cesium.Color.ORANGE },
+  });
+}
+if (q.has('radar')) addRadarSweep(viewer);
+if (q.has('pulse')) {
+  const [plon, plat] = offsetLL(-115, 82);
+  addPulseRings(viewer, plon, plat, '#ff5252');
+}
+
+viewer.scene.debugShowFramesPerSecond = true;
+setInterval(() => {
+  try {
+    msg.textContent =
+      `flags=${[...q.keys()].join(',') || 'none'} h=${Math.round(viewer.camera.positionCartographic.height)}` +
+      ` ent=${viewer.entities.values.length} ready=${viewer.dataSourceDisplay.ready}`;
+  } catch (e) { msg.textContent = 'tick-err ' + e.message; }
+}, 800);
+</script></body></html>

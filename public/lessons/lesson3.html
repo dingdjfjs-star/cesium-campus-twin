@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 3 课 · 实体 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson2.html">← 上一课</a>
+  <span class="crs">第 3 课 · 实体：往地球上放东西</span>
+  <a href="./lesson4.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 3 课：实体（Entity）——往地球上放东西</h1>
+  <p class="lead">地球有了，现在往上面"摆东西"。一栋楼、一个摄像头图标、一条路……在 Cesium 里都叫<b>实体</b>。这课学会三种最常用的：点、盒子、文字标签。</p>
+
+  <h2>先玩一玩 👇（点下面的按钮，然后自己转视角看效果）</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run" onclick="addPoint()">📍 放一个点</button>
+      <button class="run" onclick="addBox()">📦 放一个盒子(随机颜色)</button>
+      <button class="run" onclick="addLabel()">🏷 放文字标签</button>
+      <button class="run warn" onclick="viewer.entities.removeAll()">🗑 清空全部</button>
+      <span class="note">按钮可以连点多下试试 · 左下角显示当前实体数量</span>
+    </div>
+  </section>
+
+  <h2>一、JS 对象的"填表"写法（1 分钟扫盲）</h2>
+  <p>创建实体时你写的代码长这样：<code>{ position: ..., box: ... }</code>。这对大括号叫<b>对象</b>，本质是<b>填一张表</b>：</p>
+  <pre class="code"><code>{
+  position: 某个坐标,   // 表格字段1: 放在哪
+  box:      某个盒子,   // 表格字段2: 长什么样
+}</code></pre>
+  <p>规则就两条：字段名和值之间用冒号，字段之间用逗号，最后一个字段后面<b>不写</b>逗号。Cesium 读这张表，就知道你要什么样的东西。</p>
+
+  <h2>二、三种实体，逐个拆解</h2>
+
+  <h3>① 点（point）——最简单的实体</h3>
+  <pre class="code"><code>viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(114.30, 30.50, 10), // 放在哪(离地10米)
+  point: {                       // "我要一个点"
+    pixelSize: 14,               // 大小:14 个屏幕像素(固定大小,不随远近变)
+    color: Cesium.Color.RED,     // 颜色:红
+  },
+});</code></pre>
+  <ol class="lineseq">
+    <li><code>viewer.entities.add({...})</code> —— entities 是 viewer 身上的"实体仓库"，add 就是往里加一个。它会把创建的东西<b>返回</b>给你，接住就能以后操作它：<code>const p = viewer.entities.add(...)</code>。</li>
+    <li><code>position</code> —— 上课学的坐标写法原封不动用上了。</li>
+    <li><code>pixelSize: 14</code> —— "像素"单位意味着：凑近看它也不会变大，像个图钉。适合做摄像头图标、告警点。</li>
+  </ol>
+
+  <h3>② 盒子（box）——有了体积！</h3>
+  <pre class="code"><code>viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(114.30, 30.50, 20), // 盒子中心(注意:是中心,会陷地一半)
+  box: {
+    dimensions: new Cesium.Cartesian3(40, 20, 30), // 长40米 × 宽20米 × 高30米(真实尺寸!)
+    material: Cesium.Color.CYAN.withAlpha(0.8),    // 材质:青色,透明度80%
+  },
+});</code></pre>
+  <ol class="lineseq">
+    <li><code>dimensions</code> —— 又见 Cartesian3，这次三个数字的含义变成了<b>长、宽、高（米）</b>。和上一课"经纬度翻译官"是同一个类，不同场合含义不同，别慌。</li>
+    <li><b>position 是盒子的"几何中心"</b>——所以高度给 20，高 30 米的盒子会一半埋进地里。想让盒子坐地上：中心高度 = 盒高 ÷ 2。</li>
+    <li><code>withAlpha(0.8)</code> —— 半透明。0 全透明（隐身），1 不透明。数字后一个常见的坑：<b>Cesium.Color 必须大写 C</b>，写成 <code>cesium.color</code> 直接报错。</li>
+  </ol>
+
+  <h3>③ 文字标签（label）——给东西挂名牌</h3>
+  <pre class="code"><code>viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(114.30, 30.52, 60),
+  label: {
+    text: '我的第一个标签',                      // 显示的文字
+    font: '20px sans-serif',                    // 字号字体
+    fillColor: Cesium.Color.YELLOW,             // 字色
+    showBackground: true,                       // 要背景块
+    backgroundColor: Cesium.Color.BLACK.withAlpha(0.6),
+  },
+});</code></pre>
+  <p>label 就是"挂在天上的名牌"。真实项目里每栋楼头顶的名字、巡逻车跟随的名字，全是它。</p>
+
+  <div class="tip">组合技：一个实体可以<b>同时</b>带多种外观！比如既有点又有标签：
+  <code>{ position, point: {...}, label: {...} }</code> —— 一张表填两个字段而已。</div>
+
+  <div class="story">真实项目 <code>sceneObjects.js</code> 里的行道树就是一排 cylinder(圆柱)实体;
+  监控摄像头图标是画在 canvas 上再贴给 billboard(布告板)实体。原理与本课完全相同,只是"形状"换了个字段。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业（在 my1.html 里继续加）</h3>
+    <ol>
+      <li>放一个<b>30×30×60</b> 的红色盒子在你学校坐标上，调好高度让它坐在地上而不是半埋（高度该填多少？）。</li>
+      <li>给这个盒子配一个标签，写上"我的宿舍"。</li>
+      <li>用 <code>for</code> 循环一口气放 10 个盒子，位置在经度上每次 +0.001（约 100 米），排成一条线。
+        提示：<code>for (let i = 0; i &lt; 10; i++) { ... fromDegrees(114.30 + i * 0.001, 30.50, h) ... }</code> —— 这就是下一课"一片楼"的预告！</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 高 60 米的盒子想"坐"在地上，position 的高度填多少？</summary>
+    <p>30。position 是几何中心，中心离地 30 米，盒子正好下缘贴地。</p></details>
+  <details class="quiz"><summary>2. <code>pixelSize</code> 和 <code>dimensions</code> 的本质区别？</summary>
+    <p>pixelSize 是屏幕像素，拉远拉近大小不变；dimensions 是真实米数，凑近看会变大。做"图标"用前者，做"实体物"用后者。</p></details>
+  <details class="quiz"><summary>3. 想让一个实体既有图标又有名字，要创建两个实体吗？</summary>
+    <p>不用。一张"表"里同时写 point/billboard 和 label 字段，它们共享同一个 position。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson2.html"><b>上一课</b>第 2 课 · 坐标与相机</a>
+    <a href="./lesson4.html"><b>下一课</b>第 4 课 · 画出第一栋楼 →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const ORI = [114.30, 30.50]; // 本课教学坐标原点
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(ORI[0], ORI[1] - 0.004, 1500),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+  });
+
+  let n = 0; // 让每次点击位置略有错开
+  function addPoint() {
+    n++;
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(ORI[0] + (Math.random() - 0.5) * 0.004, ORI[1] + (Math.random() - 0.5) * 0.003, 10),
+      point: { pixelSize: 12 + Math.random() * 10, color: Cesium.Color.fromRandom({ alpha: 0.9 }) },
+      label: { text: '点' + n, font: '13px sans-serif', fillColor: Cesium.Color.WHITE, pixelOffset: new Cesium.Cartesian2(0, -16) },
+    });
+  }
+  function addBox() {
+    const w = 20 + Math.random() * 30, d = 15 + Math.random() * 20, h = 15 + Math.random() * 40;
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(ORI[0] + (Math.random() - 0.5) * 0.004, ORI[1] + (Math.random() - 0.5) * 0.003, h / 2),
+      box: {
+        dimensions: new Cesium.Cartesian3(w, d, h),
+        material: Cesium.Color.fromRandom({ alpha: 0.85 }),
+        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.5),
+      },
+    });
+  }
+  function addLabel() {
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(ORI[0] + (Math.random() - 0.5) * 0.004, ORI[1] + (Math.random() - 0.5) * 0.003, 80),
+      label: {
+        text: '标签' + (++n), font: '18px sans-serif', fillColor: Cesium.Color.YELLOW,
+        showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6),
+      },
+    });
+  }
+
+  // 左下角实时显示实体数(顺便学一招:定时刷新页面文字)
+  const counter = document.createElement('div');
+  counter.style.cssText = 'position:absolute;left:10px;bottom:8px;color:#7fff7f;font:12px Consolas,monospace;z-index:5;text-shadow:0 0 4px #000';
+  document.getElementById('globe').appendChild(counter);
+  setInterval(() => { counter.textContent = 'entities = ' + viewer.entities.values.length; }, 400);
+</script>
+</body>
+</html>
