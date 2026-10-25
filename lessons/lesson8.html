@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 8 课 · 动画 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson7.html">← 上一课</a>
+  <span class="crs">第 8 课 · 动画：让场景活起来</span>
+  <a href="./lesson9.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 8 课：动画——让场景"活"起来</h1>
+  <p class="lead">巡逻车跑起来、波纹扩散开，数字孪生的"生命感"全来自这课。同时这也是<b>避坑课</b>：有三个"看起来很官方"的写法，在这台电脑上会让画面全黑——我会教你怎么绕，以及为什么。</p>
+
+  <h2>先玩一玩 👇（一辆巡逻车 + 一圈告警波纹）</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run ok" onclick="startAll()">▶ 启动巡逻+波纹</button>
+      <button class="run" onclick="toggleRun()">{{⏸ 暂停 / 继续}}</button>
+      <button class="run" onclick="speed(2)">⏩ 加速 ×2</button>
+      <button class="run" onclick="speed(0.5)">⏪ 减速 ×0.5</button>
+      <span class="note">右上角有 FPS 帧率角标 · 波纹在校园中心扩散</span>
+    </div>
+  </section>
+
+  <h2>一、动画的本质：每秒 60 次"改属性"</h2>
+  <p>屏幕动画 = 每秒把画面重画约 60 次（60 FPS）。Cesium 自己负责"重画"，你只需要在<b>每次重画前</b>把物体的属性改成"这一刻应有的值"。Cesium 给了一个"重画前"的钩子：</p>
+  <pre class="code"><code>viewer.scene.preUpdate.addEventListener(function () {
+  // 每一帧渲染前都会执行这里(每秒约60次)
+  // 写法套路:用当前时间算出"现在该在哪/多大/多透明",然后赋值
+});</code></pre>
+  <p>时间从哪来？<code>Date.now()</code> 返回"1970年至今的毫秒数"——一个永远匀速增长的数字，除以 1000 就是秒。动画的灵魂公式：</p>
+  <pre class="code"><code>const t = Date.now() / 1000;        // 现在(秒)
+const 角度 = t * 速度;               // 匀速转圈
+const 位置 = 算圆周上的点(角度);      // 三角函数派上用场</code></pre>
+
+  <h2>二、安全配方 A：移动的巡逻车（Primitive + modelMatrix）</h2>
+  <p>让一个盒子沿圆周跑。两个新面孔：<b>Primitive（更底层的图元）</b>和 <b>modelMatrix（位置姿态矩阵）</b>。你可以把矩阵理解成物体的"<b>传送门</b>"——几何体永远不动，每帧把传送门挪到新位置：</p>
+  <pre class="code"><code>// ① 创建:一次性的静态几何(黄色盒子)
+const prim = viewer.scene.primitives.add(new Cesium.Primitive({
+  geometryInstances: new Cesium.GeometryInstance({
+    geometry: Cesium.BoxGeometry.fromDimensions({
+      dimensions: new Cesium.Cartesian3(8, 4, 4),     // 8×4×4 米
+      vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+    }),
+    attribute: Cesium.ColorGeometryInstanceAttribute.fromColor(
+      Cesium.Color.fromCssColorString('#ffca28')),     // 金黄色
+  }),
+  appearance: new Cesium.PerInstanceColorAppearance({ closed: true, translucent: false }),
+}));
+
+// ② 每帧:算新位置 → 更新传送门
+const hpr = new Cesium.HeadingPitchRoll(0, 0, 0);    // 朝向(机头方向)
+viewer.scene.preUpdate.addEventListener(function () {
+  if (!prim.ready) return;                            // 几何还在后台构建时先等等
+  const t = Date.now() / 1000 * speedNow;             // 当前时间×速度倍率
+  const a = t * 0.6;                                  // 圆周角度(弧度)
+  const [lon, lat] = offsetLL(Math.cos(a) * 90, Math.sin(a) * 90); // 半径90米的圆周
+  const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 2.2);        // 离地2.2米
+  hpr.heading = -a;                                   // 车头始终朝前进方向(切线)
+  prim.modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr);
+});</code></pre>
+  <ol class="lineseq">
+    <li><code>Math.cos(a) × 90, Math.sin(a) × 90</code> —— 高中三角函数：<code>(cos, sin)</code> 正好绕单位圆转，乘 90 就是半径 90 米的圆周。这就是"匀速圆周运动"的代码形态。</li>
+    <li><code>prim.ready</code> —— Primitive 的几何在后台异步构建，没建好就改矩阵会报错，先检查。</li>
+    <li><code>headingPitchRollToFixedFrame(pos, hpr)</code> —— 生成"站在 pos、朝向 hpr"的传送门矩阵。heading 就是第 2 课的"摇头角"。</li>
+    <li><b>精髓</b>：几何只创建一次，每帧只改一个矩阵——成本极低，100 辆车一起跑都不卡。</li>
+  </ol>
+
+  <h2>三、安全配方 B：扩散波纹（Billboard 逐帧改 scale/color）</h2>
+  <p>Billboard（布告板）= 一张永远面向你的贴片，最适合做图标和特效。波纹 = 一张圆环图片 + 每帧改大小和透明度：</p>
+  <pre class="code"><code>// ① 用 canvas 现画一张 128×128 的白色圆环图(不用求任何图片素材!)
+function ringCanvas() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  g.strokeStyle = 'white'; g.lineWidth = 7;
+  g.beginPath(); g.arc(64, 64, 55, 0, Math.PI * 2); g.stroke();
+  return cv;
+}
+
+// ② 挂到场景(注意两个关键参数)
+const bbs = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+const ring = bbs.add({
+  position: Cesium.Cartesian3.fromDegrees(...offsetLL(0, 0), 2),
+  image: ringCanvas(),
+  sizeInMeters: true,        // ★ 用"米"而不是像素来量大小
+});
+
+// ③ 每帧:0→1 循环的进度 f,控制放大+变透明
+viewer.scene.preUpdate.addEventListener(function () {
+  const f = (Date.now() / 1600) % 1;                 // 1.6秒一个周期
+  ring.scale = (20 + f * 200) / 128;                 // 世界直径 20→220 米
+  ring.color = Cesium.Color.RED.withAlpha(0.6 * (1 - f)); // 越大越透明
+});</code></pre>
+  <div class="warn"><b>必坑:scale 的单位是"米/像素"</b>。图是 128 像素宽,想要 200 米的世界宽度,
+  scale = 200 ÷ 128 ≈ 1.56。我们第一次直接写了 200,结果画出一个 25 公里的巨环盖住整个屏幕——
+  记住公式:<b>scale = 想要的米数 ÷ 图的像素宽</b>。</div>
+
+  <h2>四、🕳 三个"官方写法"的坑（重要，答辩也讲得）</h2>
+  <p>以下写法在 Cesium 教程里随处可见，但在这台电脑（Cesium 1.144 + 这块显卡）上会导致<b>整个场景黑屏</b>——画面全黑但代码不报错、帧率还正常，极难排查（我们用"逐个功能开关二分法"才抓到）。课程与真实项目全部绕开：</p>
+  <table class="tbl">
+    <tr><th>危险写法</th><th>本来想干嘛</th><th>安全替代</th></tr>
+    <tr><td><code>CallbackProperty</code> 驱动实体位置/半径/形状</td><td>让实体"每帧自动变"</td><td>静态几何 + 每帧改 modelMatrix / scale / color(本课配方)</td></tr>
+    <tr><td>裸 <code>Primitive</code> 装 CircleGeometry / PolygonGeometry</td><td>画圆形/多边形贴片</td><td>用 Billboard 贴图代替(配方B)</td></tr>
+    <tr><td>每帧调 <code>camera.rotateRight()</code></td><td>自动环绕巡航</td><td>隔几十秒 <code>camera.flyTo</code> 转个角度(转台式巡航)</td></tr>
+  </table>
+  <div class="tip">为什么讲这个?一是你在这台电脑上写就会踩;二是答辩被问"为什么不用官方的 CallbackProperty",
+  你能讲出"实测发现兼容性问题并给出工程绕行方案"——这是满满的工程素养分。</div>
+
+  <div class="story">真实项目 <code>patrol.js</code>(巡逻)和 <code>effects.js</code>(波纹/雷达)就是本课两个配方的"满血版":
+  巡逻车沿不规则路线走(路线用"里程参数化"而不是圆周),波纹一次三圈相位错开,雷达是旋转的楔形贴图。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>把本课配方 B 复制进 my1.html,把波纹改成<b>蓝色</b>(提示:Cesium.Color.RED 换成 <code>Cesium.Color.fromCssColorString('#00e5ff')</code>)。</li>
+      <li>让巡逻车绕的圆<b>半径变大</b>、速度变慢(改哪两个数字?)。</li>
+      <li>挑战:再画一个方形贴图 canvas,做"告警盒子"图标,让它跟在巡逻车头顶(提示:label/billboard 的 position 也可以每帧赋值)。</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 为什么动画代码要写进 preUpdate 监听器,而不是写一遍就完事?</summary>
+    <p>因为动画是"每帧改一点":preUpdate 每帧渲染前触发一次,你的代码每秒执行约 60 次,每次都把物体属性更新到"当前时刻应有的值"。</p></details>
+  <details class="quiz"><summary>2. 128 像素的圆环图想要 100 米宽,scale 写多少?</summary>
+    <p>100 ÷ 128 ≈ 0.78。</p></details>
+  <details class="quiz"><summary>3. Primitive 动画为什么"几何只建一次、每帧只改矩阵"?</summary>
+    <p>重建几何(顶点数据)要重新上传显卡,昂贵;改矩阵只是改一个"摆放指令",极廉价。这是 3D 引擎性能的第一常识。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson7.html"><b>上一课</b>第 7 课 · 点击交互</a>
+    <a href="./lesson9.html"><b>下一课</b>第 9 课 · 告警闭环(高潮课) →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const CAMPUS = { lon: 114.30, lat: 30.50 };
+  function offsetLL(dx, dy) {
+    const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+    const lat = CAMPUS.lat + dy / 111320;
+    return [lon, lat];
+  }
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.scene.debugShowFramesPerSecond = true; // 显示帧率角标
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-40, -160), 850),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+
+  // 中央地标:一圈楼当参照物
+  const M_LON = 111320 * Math.cos(CAMPUS.lat * Math.PI / 180);
+  const REFS = [
+    { dx: -60, dy: 40, w: 40, d: 20, f: 5, c: '#3fbdf2', n: '教学楼' },
+    { dx: 60, dy: 40, w: 40, d: 20, f: 5, c: '#3fbdf2', n: '实验楼' },
+    { dx: 0, dy: -70, w: 44, d: 24, f: 4, c: '#7fd8ff', n: '图书馆' },
+  ];
+  for (const b of REFS) {
+    const [lon, lat] = offsetLL(b.dx, b.dy);
+    const h = b.f * 3.2, hl = b.w / 2 / M_LON, ht = b.d / 2 / 111320;
+    viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy([
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat + ht),
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat + ht),
+        ]),
+        height: 0, extrudedHeight: h,
+        material: Cesium.Color.fromCssColorString(b.c).withAlpha(0.8),
+      },
+    });
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, h + 10),
+      label: { text: b.n, font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+               showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6) },
+    });
+  }
+
+  /* ===== 配方 B:波纹(先建,页面一开就有) ===== */
+  function ringCanvas() {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const g = cv.getContext('2d');
+    g.strokeStyle = 'white'; g.lineWidth = 7;
+    g.beginPath(); g.arc(64, 64, 55, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.15)';
+    g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.fill();
+    return cv;
+  }
+  const bbs = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+  const rings = [];
+  for (let i = 0; i < 3; i++) {
+    rings.push(bbs.add({
+      position: Cesium.Cartesian3.fromDegrees(...offsetLL(0, -10), 2),
+      image: ringCanvas(), sizeInMeters: true, scale: 0.2,
+      color: Cesium.Color.RED.withAlpha(0.6),
+    }));
+  }
+
+  /* ===== 配方 A:巡逻车 ===== */
+  const prim = viewer.scene.primitives.add(new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: Cesium.BoxGeometry.fromDimensions({
+        dimensions: new Cesium.Cartesian3(8, 4, 4),
+        vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+      }),
+      attribute: Cesium.ColorGeometryInstanceAttribute.fromColor(
+        Cesium.Color.fromCssColorString('#ffca28')),
+    }),
+    appearance: new Cesium.PerInstanceColorAppearance({ closed: true, translucent: false }),
+  }));
+  const labels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+  const carLabel = labels.add({
+    position: Cesium.Cartesian3.fromDegrees(...offsetLL(90, 0), 8),
+    text: '巡逻车 01', font: '13px sans-serif',
+    fillColor: Cesium.Color.fromCssColorString('#ffca28'),
+    showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6),
+  });
+
+  let running = false, speedNow = 1, carT = 0, lastFrame = 0;
+  viewer.scene.preUpdate.addEventListener(function () {
+    const now = Date.now();
+    // 波纹:一直跑(静止时也能看到扩散循环)
+    for (let i = 0; i < rings.length; i++) {
+      const f = ((now / 1600) + i / rings.length) % 1;
+      rings[i].scale = (20 + f * 200) / 128;
+      rings[i].color = Cesium.Color.RED.withAlpha(0.6 * (1 - f));
+    }
+    // 巡逻车:暂停时不累计时间
+    if (!running) { lastFrame = now; return; }
+    if (!prim.ready) return;
+    carT += (now - lastFrame) * speedNow;   // 毫秒累计(受速度倍率影响)
+    lastFrame = now;
+    const a = (carT / 1000) * 0.6;
+    const [lon, lat] = offsetLL(Math.cos(a) * 90, Math.sin(a) * 90 - 10);
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 2.2);
+    const hpr = new Cesium.HeadingPitchRoll(-a, 0, 0);
+    prim.modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(pos, hpr);
+    carLabel.position = Cesium.Cartesian3.fromDegrees(lon, lat, 10);
+  });
+  lastFrame = Date.now();
+
+  function startAll() { running = true; lastFrame = Date.now(); }
+  function toggleRun() { running = !running; lastFrame = Date.now(); }
+  function speed(m) { speedNow *= m; }
+</script>
+</body>
+</html>

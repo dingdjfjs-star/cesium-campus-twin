@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智慧校园数字孪生平台 · CesiumJS</title>
+  <!-- 本地 Cesium 资源(离线可用),需在加载 Cesium.js 之前声明基础路径 -->
+  <link rel="stylesheet" href="./cesium/Widgets/widgets.css" />
+  <script>window.CESIUM_BASE_URL = './cesium/';</script>
+  <script src="./cesium/Cesium.js"></script>
+  <script type="module" crossorigin src="./assets/index-BguhHTD8.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Dz2HYqOp.css">
+</head>
+<body>
+  <div id="app">
+    <div id="cesiumContainer"></div>
+    <div id="credits" style="display:none"></div>
+
+    <!-- 顶栏 -->
+    <header id="topbar">
+      <div class="brand">
+        <span class="logo"></span>
+        <div>
+          <h1>智慧校园数字孪生平台</h1>
+          <p>Campus Digital Twin · CesiumJS Demo</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span id="sceneClock" class="clock">场景时间 --:--</span>
+        <button id="btnNight" class="btn">🌙 夜间模式</button>
+        <button id="btnOrbit" class="btn active">🎯 自动巡航</button>
+        <button id="btnReset" class="btn">⌂ 复位视角</button>
+      </div>
+    </header>
+
+    <!-- 左侧:概览 / 图表 / 图层 -->
+    <aside id="leftPanel" class="panel">
+      <h2>校园概览</h2>
+      <div class="stat-grid">
+        <div class="stat"><span class="stat-num" id="statPeople">--</span><span class="stat-label">在校人数</span></div>
+        <div class="stat"><span class="stat-num" id="statPower">--</span><span class="stat-label">实时功率 kW</span></div>
+        <div class="stat"><span class="stat-num" id="statDevices">--</span><span class="stat-label">在线设备</span></div>
+        <div class="stat"><span class="stat-num" id="statTemp">--</span><span class="stat-label">平均温度 ℃</span></div>
+      </div>
+      <h2>全校能耗趋势</h2>
+      <div id="energyChart" class="chart"></div>
+      <h2>图层控制</h2>
+      <div id="layerToggles" class="layers"></div>
+    </aside>
+
+    <!-- 右侧:告警 -->
+    <aside id="rightPanel" class="panel">
+      <h2>实时告警 <span id="alarmCount" class="badge">0</span></h2>
+      <ul id="alarmList" class="alarm-list"></ul>
+      <p class="tip">点击「定位」飞到现场 ·「处理」消除波纹</p>
+    </aside>
+
+    <!-- 信息卡 -->
+    <div id="infoCard" class="panel hidden">
+      <button id="infoClose" class="icon-btn" title="关闭">✕</button>
+      <div id="infoBody"></div>
+      <div id="infoChart" class="chart"></div>
+    </div>
+
+    <!-- 图例 -->
+    <div id="legend">
+      <span><i style="background:#4fc3f7"></i>建筑</span>
+      <span><i style="background:#546e7a"></i>道路</span>
+      <span><i style="background:#00e5ff"></i>监控</span>
+      <span><i style="background:#ff5252"></i>告警</span>
+      <span><i style="background:#ffca28"></i>巡逻</span>
+    </div>
+
+    <div id="loading"><div class="spinner"></div><p>正在构建三维校园场景…</p></div>
+  </div>
+</body>
+</html>

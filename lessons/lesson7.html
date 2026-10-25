@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 7 课 · 点击交互 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson6.html">← 上一课</a>
+  <span class="crs">第 7 课 · 让场景能"点"：拾取与信息卡</span>
+  <a href="./lesson8.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 7 课：让场景能"点"——鼠标拾取与信息卡</h1>
+  <p class="lead">数字孪生和"3D 视频"的分水岭就在这课：<b>点一栋楼，它认识你</b>。学完你能做出点击弹信息卡 + 悬停高亮——评委最爱玩的功能。</p>
+
+  <h2>先玩一玩 👇（鼠标悬停任意楼会变琥珀色；<b>点击</b>弹出信息卡）</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar" id="demoBar">
+      <button class="run" onclick="buildAll()">🏙 布置校园</button>
+      <button class="run warn" onclick="clearAll()">🗑 清空</button>
+      <span class="note" id="hoverNote">先点"布置校园"</span>
+    </div>
+  </section>
+  <div id="infoCard" style="display:none;position:relative;max-width:420px;margin:-8px auto 0;background:#fff;border:2px solid #0891b2;border-radius:12px;padding:14px 18px;box-shadow:0 8px 24px rgba(8,145,178,.25);z-index:5">
+    <b id="icName" style="font-size:17px"></b>
+    <span id="icTag" style="margin-left:8px;font-size:12px;color:#059669"></span>
+    <div id="icRows" style="margin-top:8px;font-size:14px;line-height:2"></div>
+    <p style="margin:6px 0 0;font-size:12px;color:#64748b">💡 这张卡片是网页元素(DOM),不是画在地球上的——三维与二维的联动</p>
+  </div>
+
+  <h2>一、思路：三步完成"点击"魔法</h2>
+  <div class="flow">
+    <span class="step">① 监听鼠标点击,拿到<b>屏幕坐标</b></span><span class="arr">→</span>
+    <span class="step">② scene.pick 问引擎:这个点压到了谁?</span><span class="arr">→</span>
+    <span class="step">③ 从被点实体身上取出 myInfo,填进信息卡</span>
+  </div>
+
+  <h2>二、代码逐行解读</h2>
+  <pre class="code"><code>// 第①②步:装一个"鼠标监听器",专门监听左键点击
+const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+handler.setInputAction(function (movement) {
+  // movement.position = 点击位置的屏幕坐标(x,y 像素)
+  const picked = viewer.scene.pick(movement.position);  // 问引擎:这点压到了谁?
+
+  // picked 可能是 undefined(点到了空地),picked.id 才是实体本身
+  const ent = picked && picked.id;
+
+  if (!ent || !ent.myInfo) {   // 点到空地或点到树/标签等"无证人员"
+    hideCard();                // → 收起信息卡
+    return;
+  }
+
+  // 第③步:拿出第5课"贴"上去的身份证,填卡片
+  showCard(ent.myInfo);
+
+  // 顺手给楼换个高亮色(想还原?把原色存起来,见下面"悬停"段)
+  ent.polygon.material = Cesium.Color.fromCssColorString('#ffd54f').withAlpha(0.8);
+
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);   // 监听的事件类型:左键单击</code></pre>
+  <ol class="lineseq">
+    <li><code>ScreenSpaceEventHandler</code> —— "屏幕事件监听器"。除了 <code>LEFT_CLICK</code>，还能监听右键、双击、鼠标移动（马上用到）。</li>
+    <li><code>scene.pick(屏幕坐标)</code> —— 引擎的"射线检测"：从相机向点击处发一条看不见的射线，报告第一个撞到的物体。<b>这是所有三维交互的基石</b>。</li>
+    <li><code>ent.myInfo</code> —— 第 5 课埋的伏笔兑现！实体身上带着自己的数据表，点击时直接读。</li>
+    <li><code>ent.polygon.material = ...</code> —— 整体替换材质实现高亮。改颜色不是"画上去"，而是"换一张皮肤"。</li>
+  </ol>
+
+  <h2>三、悬停高亮：还要学会"还原"</h2>
+  <p>悬停（MOUSE_MOVE）高亮的难点不是"变黄"，是<b>移开后要变回去</b>——所以必须先把原色存起来：</p>
+  <pre class="code"><code>let hovered = null;                       // 记住"现在悬停在哪栋"
+
+handler.setInputAction(function (movement) {
+  const picked = viewer.scene.pick(movement.endPosition);  // 注意:移动事件叫 endPosition
+  const ent = picked && picked.id && picked.id.myInfo ? picked.id : null;
+
+  if (hovered !== ent) {                   // 悬停目标变了才干活(省性能)
+    if (hovered) {                         // 还原上一栋
+      hovered.polygon.material = Cesium.Color.fromCssColorString(hovered.myInfo.color).withAlpha(0.8);
+    }
+    hovered = ent;
+    if (hovered) {                         // 高亮新一栋
+      hovered.polygon.material = Cesium.Color.fromCssColorString('#ffd54f').withAlpha(0.75);
+    }
+  }
+}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);</code></pre>
+  <div class="warn">鼠标移动事件<b>每秒触发几十次</b>，pick 是有成本的。教学版靠"目标变了才处理"已经够用;
+  真实项目加了 60ms 节流(两次检查间隔小于60ms直接跳过),这两个词(节流/防抖)面试也常问。</div>
+
+  <h2>四、信息卡是"网页"，不是"三维"</h2>
+  <p>看本页演示:卡片是普通 HTML div(圆角、阴影、字号都是 CSS),Cesium 只负责三维画面。
+  <b>三维引擎管"世界",网页管"界面"</b>,两者通过 JS 变量(实体数据)握手——所有数字孪生大屏都是这个套路:
+  中间一块三维画布,四周一圈网页面板。</p>
+
+  <div class="story">真实项目 <code>main.js</code> 搜 <code>LEFT_CLICK</code>:点击楼先 <code>flyTo</code> 聚焦(下下节还没讲,
+  其实就是第2课的相机飞行+一个 HeadingPitchRange 控制距离),再 <code>ui.showBuilding(b)</code> 弹出更豪华的卡片(带 ECharts 图表,第10课)。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>把本课代码搬进你的 <code>my1.html</code>,实现:点击楼 → <code>alert(ent.myInfo.name + ' 到此一游!')</code>——一行代码验证拾取通了。</li>
+      <li>升级成页内信息卡(照抄本页 showCard/hideCard,或自己写个更漂亮的)。</li>
+      <li>挑战:点击后相机 <code>viewer.flyTo(ent, { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-55), 250) })</code>
+      飞过去围观这栋楼(HeadingPitchRange = 朝向/俯角/距离,翻译成人话:斜 55° 看,离 250 米)。</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 点到空地时 <code>scene.pick</code> 返回什么？代码怎么防崩？</summary>
+    <p>返回 undefined。必须先判断 <code>if (!ent || !ent.myInfo)</code> 再取属性，否则"Cannot read property of undefined"——新手最常见的崩溃。</p></details>
+  <details class="quiz"><summary>2. 悬停高亮为什么必须先"存原色"？</summary>
+    <p>因为鼠标移开时引擎不会自动还原，得自己换回去；原色没存，就永远还原不了（或还原错）。</p></details>
+  <details class="quiz"><summary>3. 信息卡是画在三维场景里的吗？</summary>
+    <p>不是。是普通网页 div 叠在画布上方。三维管世界、网页管界面，这是所有数字孪生大屏的架构。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson6.html"><b>上一课</b>第 6 课 · 道路水面绿化</a>
+    <a href="./lesson8.html"><b>下一课</b>第 8 课 · 动画：让场景活起来 →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const CAMPUS = { lon: 114.30, lat: 30.50 };
+  function offsetLL(dx, dy) {
+    const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+    const lat = CAMPUS.lat + dy / 111320;
+    return [lon, lat];
+  }
+  const BUILDINGS = [
+    { name: '教学楼A', dx: -60, dy: 40, w: 44, d: 22, floors: 5, color: '#3fbdf2', usage: '智慧教室', cap: 1200 },
+    { name: '教学楼B', dx: 10, dy: 40, w: 44, d: 22, floors: 5, color: '#3fbdf2', usage: '智慧教室', cap: 1200 },
+    { name: '实验楼', dx: 80, dy: 40, w: 40, d: 26, floors: 6, color: '#26c6da', usage: '专业实验室', cap: 700 },
+    { name: '图书馆', dx: 0, dy: -30, w: 48, d: 30, floors: 5, color: '#7fd8ff', usage: '藏书80万册', cap: 1000 },
+    { name: '行政楼', dx: -70, dy: -60, w: 36, d: 22, floors: 4, color: '#80cbc4', usage: '校务管理', cap: 300 },
+    { name: '食堂', dx: 60, dy: -60, w: 32, d: 24, floors: 2, color: '#ffb74d', usage: '三层餐厅', cap: 1500 },
+    { name: '学生公寓1', dx: -110, dy: -10, w: 16, d: 34, floors: 6, color: '#66bb6a', usage: '智慧门禁', cap: 600 },
+    { name: '学生公寓2', dx: -110, dy: 40, w: 16, d: 34, floors: 6, color: '#66bb6a', usage: '智慧门禁', cap: 600 },
+  ];
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-120, -180), 900),
+    orientation: { heading: Cesium.Math.toRadians(10), pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+  const M_LON = 111320 * Math.cos(CAMPUS.lat * Math.PI / 180);
+
+  function buildAll() {
+    for (const b of BUILDINGS) {
+      const [lon, lat] = offsetLL(b.dx, b.dy);
+      const h = b.floors * 3.2;
+      const hl = b.w / 2 / M_LON, ht = b.d / 2 / 111320;
+      const ent = viewer.entities.add({
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy([
+            Cesium.Cartesian3.fromDegrees(lon - hl, lat - ht),
+            Cesium.Cartesian3.fromDegrees(lon + hl, lat - ht),
+            Cesium.Cartesian3.fromDegrees(lon + hl, lat + ht),
+            Cesium.Cartesian3.fromDegrees(lon - hl, lat + ht),
+          ]),
+          height: 0, extrudedHeight: h,
+          material: Cesium.Color.fromCssColorString(b.color).withAlpha(0.8),
+          outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.4),
+        },
+      });
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, h + 12),
+        label: { text: b.name, font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+                 showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6) },
+      });
+      ent.myInfo = b;
+    }
+    document.getElementById('hoverNote').textContent = '悬停试试 → 再点击任意楼';
+  }
+  function clearAll() {
+    viewer.entities.removeAll();
+    hovered = null;
+    hideCard();
+    document.getElementById('hoverNote').textContent = '先点"布置校园"';
+  }
+
+  /* ---------- 信息卡 ---------- */
+  const card = document.getElementById('infoCard');
+  function showCard(b) {
+    document.getElementById('icName').textContent = b.name;
+    document.getElementById('icTag').textContent = '✓ 在线';
+    document.getElementById('icRows').innerHTML =
+      '<div>用途:' + b.usage + '</div><div>楼层:' + b.floors + ' 层(高 ' + (b.floors * 3.2).toFixed(1) + ' 米)</div>' +
+      '<div>面积:' + b.w * b.d + ' ㎡ · 容纳 ' + b.cap + ' 人</div>';
+    card.style.display = 'block';
+  }
+  function hideCard() { card.style.display = 'none'; }
+
+  /* ---------- 点击与悬停 ---------- */
+  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  let hovered = null;
+
+  handler.setInputAction(function (movement) {
+    const picked = viewer.scene.pick(movement.position);
+    const ent = picked && picked.id && picked.id.myInfo ? picked.id : null;
+    if (!ent) { hideCard(); return; }
+    showCard(ent.myInfo);
+    viewer.flyTo(ent, { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-55), 260) });
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  let lastMove = 0;
+  handler.setInputAction(function (movement) {
+    const now = Date.now();
+    if (now - lastMove < 60) return;           // 节流:60ms 内只查一次
+    lastMove = now;
+    const picked = viewer.scene.pick(movement.endPosition);
+    const ent = picked && picked.id && picked.id.myInfo ? picked.id : null;
+    if (hovered !== ent) {
+      if (hovered) {
+        hovered.polygon.material = Cesium.Color.fromCssColorString(hovered.myInfo.color).withAlpha(0.8);
+      }
+      hovered = ent;
+      if (hovered) {
+        hovered.polygon.material = Cesium.Color.fromCssColorString('#ffd54f').withAlpha(0.75);
+      }
+      viewer.canvas.style.cursor = hovered ? 'pointer' : 'default';
+    }
+  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+</script>
+</body>
+</html>

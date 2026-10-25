@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 11 课 · 组装与答辩 | Cesium 数字孪生入门</title>
+<link href="./common.css" rel="stylesheet">
+<style>
+  .map-tbl td:first-child{white-space:nowrap}
+  .qa details{margin:.6em 0}
+</style>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson10.html">← 上一课</a>
+  <span class="crs">第 11 课 · 组装与答辩（毕业课）</span>
+  <a href="./index.html">📚 回课程目录</a>
+</header>
+
+<main>
+  <h1>第 11 课：组装与答辩——从"会零件"到"会整机"</h1>
+  <p class="lead">最后一课不讲新代码，讲两件事：<b>真实项目怎么组装的</b>（一张地图看懂全部文件）+ <b>怎么把它讲给评委听</b>（60 秒演示动线 + 高频问答）。</p>
+
+  <h2>一、真实项目解剖图：课程 ↔ 文件对照</h2>
+  <p>你 11 课学的每个零件，在 <code>E:\zcode\cesium-campus-twin</code> 里都有对应的"满血版"：</p>
+  <table class="tbl map-tbl">
+    <tr><th>课程</th><th>项目文件</th><th>满血版多了什么</th></tr>
+    <tr><td>1 地球 / 2 相机</td><td><code>src/createScene.js</code></td><td>纯色科技地球(无影像、离线)、雾效、光照、开场飞入动画</td></tr>
+    <tr><td>3 实体 / 4 楼 / 5 数据</td><td><code>src/campusData.js</code> + <code>src/sceneObjects.js</code></td><td>41 栋楼(带旋转角/屋顶/用途),楼名来自真实卫星图;道路/湖/操场/广场/树林全是数据表驱动</td></tr>
+    <tr><td>6 道路水绿</td><td><code>sceneObjects.js</code> 中段</td><td>corridor 主环线+支路、双层椭圆运动场、湖岸叠加、树林随机播种(固定种子可复现)</td></tr>
+    <tr><td>7 点击交互</td><td><code>src/main.js</code>(搜 LEFT_CLICK)</td><td>信息卡带 ECharts 柱图、摄像头也能点、悬停高亮带节流</td></tr>
+    <tr><td>8 动画</td><td><code>src/patrol.js</code> + <code>src/effects.js</code></td><td>巡逻沿不规则路线(里程参数化)、三圈波纹、旋转雷达、转台巡航</td></tr>
+    <tr><td>9 告警闭环</td><td><code>src/alarmManager.js</code></td><td>告警分级配色、去重、上限管理、同一楼多告警处理保护</td></tr>
+    <tr><td>10 面板图表</td><td><code>src/ui.js</code></td><td>玻璃拟态深色面板、图层开关、楼栋 24h 能耗图</td></tr>
+    <tr><td>— 组装</td><td><code>src/main.js</code></td><td>总装配车间 + 昼夜切换 + 自动巡航 + ?debug 排障 HUD</td></tr>
+  </table>
+
+  <h2>二、main.js 的组装顺序（为什么是这个顺序）</h2>
+  <pre class="code"><code>1. createScene()      // 先有舞台(地球)
+2. createCampus()     // 再有演员(楼/路/树)
+3. createPatrols()    // 然后让演员动起来(巡逻/波纹/雷达)
+4. createAlarmManager()  // 业务大脑(告警闭环)
+5. initUI()           // 舞台外围的仪表盘(面板/信息卡/图层开关)
+6. 鼠标/按钮事件       // 最后把"遥控器"接线
+7. 开场动画            // 幕布拉起</code></pre>
+  <p>依赖关系决定顺序：UI 要显示告警数 → 告警管理器得先存在；告警要染红楼 → 楼得先画出来。以后你自己组装任何项目，先画<b>依赖图</b>（谁需要谁），按依赖从少到多排列。</p>
+
+  <h2>三、60 秒演示动线（背下来）</h2>
+  <table class="tbl">
+    <tr><th>时间</th><th>动作</th><th>解说词(参考)</th></tr>
+    <tr><td>0-10s</td><td>打开页面,让开场动画飞完</td><td>"这是基于 CesiumJS 的智慧校园数字孪生,场景按真实卫星图数字化重建,41 栋建筑、道路、水系与真实布局一致。"</td></tr>
+    <tr><td>10-25s</td><td>点击图书馆</td><td>"单体化交互:任意楼可点击,联动信息卡查看面积、人数、能耗曲线——数据与模型一一对应。"</td></tr>
+    <tr><td>25-40s</td><td>等告警出现(或提前触发),点「定位」→「处理」</td><td>"这是核心的告警闭环:感知、呈现、定位、处置。真实系统里数据源换成传感器/WebSocket 即可。"</td></tr>
+    <tr><td>40-50s</td><td>指出巡逻车、监控视域</td><td>"动态元素:安保巡逻、6 路监控视域分析,全部实时驱动。"</td></tr>
+    <tr><td>50-60s</td><td>点夜间模式,放下鼠标看巡航</td><td>"昼夜场景与自动巡航。整体纯前端实现,离线可运行,不依赖付费服务。"</td></tr>
+  </table>
+  <div class="tip">演示前一晚必做:关掉电脑上其他程序;开好页面;把告警节奏调慢一点(改 main.js 里 26000 为更大)避免演示时太吵。</div>
+
+  <h2>四、高频答辩问答（预演）</h2>
+  <details class="quiz"><summary>Q1:为什么用 CesiumJS 而不用 Three.js/UE？</summary>
+    <p>Cesium 生来面向"地理坐标 + 大范围场景"（自带地球、经纬度、地形、GIS 标准格式支持），数字孪生园区正好落在它 sweet spot；Three.js 是通用 3D 引擎，地理能力要全部自建；UE 效果强但部署重、需客户端，Web 大屏场景不合适。</p></details>
+  <details class="quiz"><summary>Q2:模型怎么来的？为什么不是照片级？</summary>
+    <p>建筑轮廓按真实卫星图数字化（位置/尺寸/朝向等比例还原），数据驱动生成——换校区只换数据表。照片级需要倾斜摄影或人工建模，成本高且本 demo 的重点是"孪生逻辑闭环"而非渲染精度；架构上预留了 3D Tiles/glTF 接入位。</p></details>
+  <details class="quiz"><summary>Q3:数据是真的吗？怎么接真实数据？</summary>
+    <p>前端模拟（随机游走+定时告警）。数据消费已收敛在明确接口处：面板读 stats、告警读 alarmManager——接真实系统时把数据源换成 WebSocket/MQTT 回调，业务与渲染代码零改动。</p></details>
+  <details class="quiz"><summary>Q4:性能怎么样？</summary>
+    <p>约 450 个实体 + 十几个图元，1080p 稳定 100+ FPS（现场可开 ?debug=1 展示帧率）。动画采用"静态几何+每帧仅更新矩阵/属性"，避免几何重建；若扩展到城市级，可切 Primitive 合批与 3D Tiles。</p></details>
+  <details class="quiz"><summary>Q5:遇到过什么技术难点？（送分题，讲踩坑故事）</summary>
+    <p>讲三个渲染停摆坑：CallbackProperty 动态实体、圆/多边形裸图元、逐帧相机旋转,在本机 Cesium 1.144+特定 GPU 会让画面全黑且无报错。我们做了特性开关二分排查页逐一定位,全部用"静态几何+矩阵/属性更新"方案绕行,并把结论沉淀成了内部避坑手册——体现的是工程排障能力。</p></details>
+
+  <h2>五、毕业作业（认真做，做完你就不需要我了）</h2>
+  <div class="homework">
+    <h3>🎓 从空文件夹独立完成"单楼数字孪生"</h3>
+    <p>不看任何课程代码，从 <code>public\lessons\graduation.html</code> 新建空文件开始，完成检查单：</p>
+    <ul>
+      <li>□ 引入 Cesium,显示地球（第 1 课）</li>
+      <li>□ 相机开场定位到你学校城市（第 2 课）</li>
+      <li>□ 用数据表画 3 栋楼,其中 1 栋是你们学院楼,挂上真名（第 4、5 课）</li>
+      <li>□ 铺 1 条路、挖 1 个湖或建 1 个操场（第 6 课）</li>
+      <li>□ 点击楼弹出信息卡（第 7 课）</li>
+      <li>□ 一个持续扩散的告警波纹 + 该楼染红,点击画面空白处还原（第 8、9 课）</li>
+      <li>□ 一个数字面板:显示"今日用电",每 2 秒随机游走（第 10 课）</li>
+    </ul>
+    <p>卡住时：先 F12 看报错 → 回对应课"检查点"复习 → 实在不行带着报错来问我。完成后把文件发我,我给你逐行点评。</p>
+  </div>
+
+  <h2>六、下一步去哪（进阶路线）</h2>
+  <ul>
+    <li><b>让楼更真实</b>：学习加载 glTF 模型（<code>viewer.entities.add({ model: {...} })</code>），网上有很多免费校园/建筑模型。</li>
+    <li><b>接入真实地理</b>：申请免费的天地图 key 当底图（替换纯色地球），场景立刻"落地"。</li>
+    <li><b>真实数据</b>：写一个 20 行的 Node.js WebSocket 服务端推模拟数据,前端 setInterval 全换 onmessage——全栈闭环。</li>
+    <li><b>继续土木/GIS 方向</b>：Cesium 的地形(terrain)、3D Tiles(倾斜摄影)、矢量瓦片是下一座山。</li>
+    <li><b>就业视角</b>：数字孪生/智慧城市/GIS 前端是真实岗位方向,这套课程覆盖的正是 JD 里的高频词。</li>
+  </ul>
+
+  <h2>结课</h2>
+  <p>11 课走完，你已经从"完全小白"到能读懂、修改、扩展一个真实项目,并独立搭建最小可用版本——这就是"会做数字孪生"的起点。</p>
+  <p>🎓 <b>恭喜毕业！</b>项目在你的电脑上(<code>E:\zcode\cesium-campus-twin</code>),课程永远在
+  <code>http://localhost:5173/lessons/index.html</code>,随时回来翻。</p>
+
+  <nav class="pager">
+    <a href="./lesson10.html"><b>上一课</b>第 10 课 · 面板与图表</a>
+    <a href="./index.html"><b>返回</b>课程目录 · 领毕业作业</a>
+  </nav>
+</main>
+</body>
+</html>

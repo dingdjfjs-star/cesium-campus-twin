@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 6 课 · 道路水面绿化 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson5.html">← 上一课</a>
+  <span class="crs">第 6 课 · 道路、水面与绿化</span>
+  <a href="./lesson7.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 6 课：道路、水面与绿化——校园的"血肉"</h1>
+  <p class="lead">只有楼的城市是孤岛。这课学两个新形状：<b>走廊 corridor（带宽度的路）</b>和<b>椭圆 ellipse（湖/操场）</b>，再送一排"程序化种树"。</p>
+
+  <h2>先玩一玩 👇（按 1→2→3→4 的顺序点，建出一座小镇）</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run" onclick="addRoad()">1️⃣ 铺一条主路</button>
+      <button class="run" onclick="addPond()">2️⃣ 挖一片湖</button>
+      <button class="run" onclick="addField()">3️⃣ 建运动场</button>
+      <button class="run ok" onclick="addTrees()">4️⃣ 种一排树</button>
+      <button class="run" onclick="viewer.entities.removeAll()">🗑 全清</button>
+      <span class="note">每个按钮可以反复点(位置会错开)</span>
+    </div>
+  </section>
+
+  <h2>一、走廊 corridor：自带宽度的路</h2>
+  <p>第 5 课的多边形是"把点围成面"，<b>走廊</b>则是"把一串点连成线，再给线一个宽度"——正是路的逻辑：</p>
+  <pre class="code"><code>viewer.entities.add({
+  corridor: {
+    positions: [                          // 路的"骨架":一串拐点(局部米坐标→经纬度)
+      Cesium.Cartesian3.fromDegrees(...offsetLL(-150, 0)),
+      Cesium.Cartesian3.fromDegrees(...offsetLL(0, 0)),
+      Cesium.Cartesian3.fromDegrees(...offsetLL(0, 120)),
+    ],
+    width: 12,                            // 路宽 12 米(真实米数,别忘单位)
+    height: 0.5,                          // 稍微抬一点,避免和地面"打架"闪烁
+    material: Cesium.Color.fromCssColorString('#3b5364').withAlpha(0.95),
+  },
+});</code></pre>
+  <ol class="lineseq">
+    <li><code>positions</code> —— 路的走向，想拐弯就多点几个点（真实项目的主环路用了 14 个拐点）。</li>
+    <li><code>width: 12</code> —— 双向两车道约 7 米，主干道 10~12 米，注意这是<b>总宽</b>不是半宽。</li>
+    <li><code>height: 0.5</code> —— 小抬升 0.5 米。两个面完全重合时 GPU 会"闪烁打架"（术语 z-fighting），错开一点就相安无事。真实项目道路抬 1.2 米，同理。</li>
+  </ol>
+
+  <h2>二、椭圆 ellipse：湖、操场、广场一把抓</h2>
+  <pre class="code"><code>// 湖(偏东 120 米,偏北 60 米;长轴 70 米 × 短轴 50 米)
+viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(...offsetLL(120, 60), 0.6),
+  ellipse: {
+    semiMajorAxis: 70,    // 长半径(米) — 椭圆"躺着"方向的一半
+    semiMinorAxis: 50,    // 短半径(米)
+    material: Cesium.Color.fromCssColorString('#0277bd').withAlpha(0.75),
+    outline: true,
+    outlineColor: Cesium.Color.fromCssColorString('#4fc3f7').withAlpha(0.5),
+  },
+});
+
+// 运动场 = 两层椭圆叠出来:外圈红色跑道 + 内圈绿茵场
+// 外圈
+{ ellipse: { semiMajorAxis: 60, semiMinorAxis: 45, material: 红色 } }
+// 内圈(同心,略小)
+{ ellipse: { semiMajorAxis: 46, semiMinorAxis: 31, material: 绿色 } }</code></pre>
+  <ol class="lineseq">
+    <li>注意是<b>半径</b>不是直径：想要 140 米长的湖，semiMajorAxis 写 70。</li>
+    <li>两个半径写一样就是正圆（广场）。</li>
+    <li>"叠"是三维场景造型的万能手法：跑道+草皮、湖+岸、屋顶+楼体，全是叠出来的。</li>
+  </ol>
+
+  <h2>三、程序化种树：让代码替你干活</h2>
+  <p>一棵棵写坐标太蠢了。"沿着这条路每隔 15 米种一棵"这种<b>规律</b>，正是循环最擅长的：</p>
+  <pre class="code"><code>for (let x = -140; x <= 100; x += 15) {          // 从西到东,步长15米
+  const [lon, lat] = offsetLL(x, 10);            // 路北侧 10 米处
+  viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, 3), // 树中心离地3米
+    cylinder: {                                  // 圆柱体当树冠
+      length: 6, topRadius: 2.2, bottomRadius: 3, // 高6米,上小下大更像树
+      material: Cesium.Color.fromCssColorString('#2e9e5b'),
+    },
+  });
+}</code></pre>
+  <ol class="lineseq">
+    <li><code>cylinder</code> 圆柱：上半径小、下半径大，就有"树冠"的味儿。</li>
+    <li>真实项目更进一步：在林地多边形里<b>随机撒</b>树（还避开楼），300+ 棵树一个循环搞定——这就是"程序化生成"，答辩时可以大方讲。</li>
+  </ol>
+
+  <div class="story">真实项目 <code>sceneObjects.js</code> 里:搜 <code>corridor</code> 能找到 6 条道路,搜 <code>ellipse</code> 能找到
+  两个运动场/两个湖/圆形广场,搜 <code>cylinder</code> 就是那片树林。和本课唯一区别:数据全部来自 campusData.js 的表。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>给你的 <code>my1.html</code> 校园铺一条"丁字路"（一条东西向 + 一条南北向相接）。</li>
+      <li>在楼群里挖一个湖,并给湖配一圈"绿化岸"(提示:先画一个大一圈的深绿椭圆垫底,再画水面)。</li>
+      <li>挑战:写一个双层循环 <code>for(x...){ for(y...){...} }</code>,种出一个 5×5 的树阵。</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 为什么道路要 height: 0.5 抬起来？</summary>
+    <p>避免和地面完全重合导致的 z-fighting 闪烁（两个面争抢"谁在上面"，GPU 随机翻面）。</p></details>
+  <details class="quiz"><summary>2. 想画直径 60 米的圆形广场，两个 axis 各写多少？</summary>
+    <p>都写 30（半径 30 = 直径 60；两个相等即为正圆）。</p></details>
+  <details class="quiz"><summary>3. "跑道+内场"用了什么造型思想？</summary>
+    <p>叠加：两个同心椭圆，外层大（跑道色）、内层小（草色），叠出真实运动场的层次。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson5.html"><b>上一课</b>第 5 课 · 数据驱动</a>
+    <a href="./lesson7.html"><b>下一课</b>第 7 课 · 让场景能"点" →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const CAMPUS = { lon: 114.30, lat: 30.50 };
+  function offsetLL(dx, dy) {
+    const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+    const lat = CAMPUS.lat + dy / 111320;
+    return [lon, lat];
+  }
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-30, -60), 1100),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+
+  let roadShift = 0, pondShift = 0, fieldShift = 0, treeShift = 0;
+
+  function addRoad() {
+    roadShift -= 30;
+    viewer.entities.add({
+      corridor: {
+        positions: [
+          Cesium.Cartesian3.fromDegrees(...offsetLL(-150 + roadShift, 0)),
+          Cesium.Cartesian3.fromDegrees(...offsetLL(0 + roadShift, 0)),
+          Cesium.Cartesian3.fromDegrees(...offsetLL(0 + roadShift, 120)),
+        ],
+        width: 12, height: 0.5,
+        material: Cesium.Color.fromCssColorString('#3b5364').withAlpha(0.95),
+      },
+    });
+  }
+  function addPond() {
+    pondShift -= 60;
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(...offsetLL(120 + pondShift, 60), 0.5),
+      ellipse: { semiMajorAxis: 78, semiMinorAxis: 58,
+        material: Cesium.Color.fromCssColorString('#156531').withAlpha(0.9) },
+    });
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(...offsetLL(120 + pondShift, 60), 0.6),
+      ellipse: { semiMajorAxis: 70, semiMinorAxis: 50,
+        material: Cesium.Color.fromCssColorString('#0277bd').withAlpha(0.75),
+        outline: true, outlineColor: Cesium.Color.fromCssColorString('#4fc3f7').withAlpha(0.5) },
+    });
+  }
+  function addField() {
+    fieldShift -= 80;
+    const p = offsetLL(-120 + fieldShift, 110);
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(p[0], p[1], 0.5),
+      ellipse: { semiMajorAxis: 60, semiMinorAxis: 45,
+        material: Cesium.Color.fromCssColorString('#b74a3d').withAlpha(0.7),
+        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.4) },
+    });
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(p[0], p[1], 0.6),
+      ellipse: { semiMajorAxis: 46, semiMinorAxis: 31,
+        material: Cesium.Color.fromCssColorString('#2e7d32').withAlpha(0.9) },
+    });
+  }
+  function addTrees() {
+    treeShift -= 20;
+    for (let x = -140; x <= 100; x += 15) {
+      const [lon, lat] = offsetLL(x, treeShift - 30);
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 3),
+        cylinder: {
+          length: 5 + (x % 3), topRadius: 2.2, bottomRadius: 3,
+          material: Cesium.Color.fromCssColorString('#2e9e5b').withAlpha(0.95),
+        },
+      });
+    }
+  }
+</script>
+</body>
+</html>

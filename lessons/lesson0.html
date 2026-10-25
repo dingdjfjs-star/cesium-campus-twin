@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 0 课 · 数字孪生是什么 | Cesium 数字孪生入门</title>
+<link href="./common.css" rel="stylesheet">
+</head>
+<body>
+<header class="site">
+  <a href="./index.html">📚 课程目录</a>
+  <span class="crs">第 0 课 · 数字孪生是什么（概念课，今天不用写代码）</span>
+  <a href="./lesson1.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 0 课：数字孪生到底是什么？</h1>
+  <p class="lead">这节课 10 分钟，目标只有一个：建立一张"地图"，知道后面 11 节课分别在造哪个零件。</p>
+
+  <h2>一、一句话版本</h2>
+  <p><b>数字孪生 = 给现实世界造一个三维镜像，让数据在镜像里流动，人可以在镜像里看、点、处置。</b></p>
+  <p>拆开看三个关键词：</p>
+  <ul>
+    <li><b>三维镜像</b>——把学校/工厂/城市按真实布局画成一个 3D 世界（对应前 6 课）；</li>
+    <li><b>数据流动</b>——楼里多少人、用了多少电、哪里着火报警，实时反映到镜像里（对应第 8–10 课）；</li>
+    <li><b>看、点、处置</b>——人能点一栋楼看详情、点一条告警飞到现场、点处理消掉警情（对应第 7、9 课）。</li>
+  </ul>
+  <div class="tip">答辩时被问"什么是数字孪生"，就把上面这句加粗的话背出来，再补一句：
+  "我这个 demo 演示了最小闭环：感知（模拟告警）→ 呈现（波纹+染红）→ 定位（镜头飞行）→ 处置（消警还原）。"</div>
+
+  <h2>二、它和"3D 地图""3D 游戏"有什么区别？</h2>
+  <table class="tbl">
+    <tr><th></th><th>3D 地图（如谷歌地球）</th><th>3D 游戏</th><th>数字孪生</th></tr>
+    <tr><td><b>世界</b></td><td>真实地球</td><td>虚构场景</td><td>真实地球上的真实园区</td></tr>
+    <tr><td><b>活不活</b></td><td>静态看</td><td>角色在动</td><td><b>数据驱着场景动</b></td></tr>
+    <tr><td><b>目的</b></td><td>浏览</td><td>娱乐</td><td>监控 + 管理 + 处置</td></tr>
+  </table>
+  <p>所以数字孪生的"灵魂"不是画得像，而是<b>数据和场景绑在一起</b>——楼不只是楼，它带着"功率/人数/告警状态"这些活的属性。</p>
+
+  <h2>三、记住这张三层图（整个课程的地图）</h2>
+  <div class="arch">
+    <div class="box" style="border-top:4px solid #0891b2"><b>① 数据层</b>一张"表格"<br>描述世界长什么样：每栋楼的位置、大小、层数、名字<br><small>→ 第 5 课 · 项目文件 <code>campusData.js</code></small></div>
+    <div class="box" style="border-top:4px solid #7c3aed"><b>② 引擎层</b>一支"画笔"<br>读表格，把地球、楼、路、树画成三维世界<br><small>→ 第 1–6 课 · <code>createScene.js</code> <code>sceneObjects.js</code></small></div>
+    <div class="box" style="border-top:4px solid #d97706"><b>③ 业务层</b>一群"齿轮"</br>告警、巡逻、点击、图表，让世界活起来并能操作<br><small>→ 第 7–10 课 · <code>alarmManager.js</code> <code>patrol.js</code> <code>ui.js</code></small></div>
+  </div>
+  <p>再加一个"总装配车间"把三层拧在一起：<code>main.js</code>（第 11 课讲）。</p>
+
+  <h2>四、几个你会反复听到的词（白话版）</h2>
+  <table class="tbl">
+    <tr><th>词</th><th>白话解释</th></tr>
+    <tr><td><code>CesiumJS</code></td><td>三维引擎，帮你画地球的现成工具库。我们不用从零写 3D，只要"指挥"它。</td></tr>
+    <tr><td><code>WebGL</code></td><td>浏览器调用显卡画 3D 的底层接口。Cesium 帮你封装好了，这门课不用直接碰它。</td></tr>
+    <tr><td><code>Entity 实体</code></td><td>场景里的一个"东西"：一栋楼、一个点、一条路都是实体。第 3 课正式登场。</td></tr>
+    <tr><td><code>经纬度</code></td><td>地球上的"门牌号"。第 2 课专门讲。</td></tr>
+    <tr><td><code>API</code></td><td>工具库提供给你的"遥控器按钮"。比如 <code>viewer.camera.flyTo(...)</code> 就是"让相机飞过去"。</td></tr>
+    <tr><td><code>IoT</code></td><td>物联网，真实项目里传感器上报数据。我们的 demo 用代码"假装"数据来了。</td></tr>
+  </table>
+
+  <h2>五、检查点（先自己答，再点开看）</h2>
+  <details class="quiz"><summary>1. "数据驱动场景"为什么重要？</summary>
+    <p>因为画图的代码是通用的，世界长什么样全由数据表决定。换一所学校，不用改一行渲染代码，换张表就行——
+    我们的真实项目就是这么把一张卫星图换成三维校园的。</p></details>
+  <details class="quiz"><summary>2. 数字孪生和 3D 演示动画的本质区别是？</summary>
+    <p>3D 动画是"录像"，数字孪生是"直播"——场景状态由实时数据驱动，且人可以反过来操作它（定位、处置）。</p></details>
+  <details class="quiz"><summary>3. "告警 → 波纹 → 定位 → 处理" 这套流程，属于三层里的哪层？</summary>
+    <p>业务层。它消费数据、指挥引擎层改画面（染红/波纹），再用引擎层的相机能力（flyTo）完成定位。</p></details>
+
+  <div class="homework">
+    <h3>📝 课后小任务（不写代码）</h3>
+    <ol>
+      <li>打开真实项目的 <code>src\campusData.js</code>，只看前 30 行，找到 <code>name: '图书馆'</code> 那一行，
+      对照上面三层图，说出它属于哪层（数据层）。</li>
+      <li>再打开 <code>src\main.js</code> 扫一眼——看不懂没关系，第 11 课学完你就能读懂 80%。</li>
+    </ol>
+  </div>
+
+  <nav class="pager">
+    <a href="./index.html"><b>上一页</b>课程目录</a>
+    <a href="./lesson1.html"><b>下一课</b>第 1 课 · 看到你的第一个地球 →</a>
+  </nav>
+</main>
+</body>
+</html>

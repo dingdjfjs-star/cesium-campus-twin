@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 10 课 · 面板与图表 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+<script src="./vendor/echarts.min.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson9.html">← 上一课</a>
+  <span class="crs">第 10 课 · 面板与实时图表（数字孪生的"脸"）</span>
+  <a href="./lesson11.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 10 课：面板与实时图表——给三维世界配"仪表盘"</h1>
+  <p class="lead">大屏 = 中间三维 + 四周面板。这课学两样：<b>数字滚动面板</b>（DOM + 定时器）和 <b>ECharts 实时曲线</b>（图表界的国民工具）。数据全是模拟的，但接口留好了，接真数据只换一处。</p>
+
+  <h2>先看效果 👇（数字每 2 秒变一次；曲线每秒推一个点）</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run" onclick="toggleStream()">{{⏸ 暂停 / 恢复数据流}}</button>
+      <span class="note">曲线上限 40 个点,满了自动"左移"(像心电监护仪)</span>
+    </div>
+  </section>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;max-width:860px;margin:12px auto">
+    <div class="mini"><span class="mini-num" id="stPeople">--</span><span class="mini-label">在校人数</span></div>
+    <div class="mini"><span class="mini-num" id="stPower">--</span><span class="mini-label">实时功率 kW</span></div>
+    <div class="mini"><span class="mini-num" id="stAlarm">0</span><span class="mini-label">未处理告警</span></div>
+    <div style="flex:2;min-width:320px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">
+      <b style="font-size:13px;color:#475569">全校能耗趋势(模拟)</b>
+      <div id="chart" style="width:100%;height:180px"></div>
+    </div>
+  </div>
+  <style>
+    .mini{flex:1;min-width:120px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;align-items:center}
+    .mini-num{font-size:24px;font-weight:700;color:#0369a1;font-variant-numeric:tabular-nums}
+    .mini-label{font-size:12px;color:#64748b;margin-top:2px}
+  </style>
+
+  <h2>一、数字面板：DOM + 定时器 + 随机游走</h2>
+  <p>面板数字的"实时感"来自三件套：<b>定时器</b>（每 2 秒跑一次）、<b>随机游走</b>（在旧值上加一点小随机，而不是完全随机——曲线才像真的）、<b>DOM 更新</b>（把数字写进网页元素）。</p>
+  <pre class="code"><code>// ① 随机游走:在旧值附近小步乱走(比纯随机真实一万倍)
+function walk(v, step, min, max) {
+  v += (Math.random() - 0.5) * step;   // 上下随机 ±step/2
+  return Math.min(max, Math.max(min, v)); // 别走出边界
+}
+
+// ② 状态对象:全校指标的"账本"
+const stats = { people: 8600, power: 420 };
+
+// ③ 每 2 秒:更新账本 → 刷新面板
+setInterval(() => {
+  stats.people = walk(stats.people, 60, 8200, 9200);
+  stats.power  = walk(stats.power, 12, 350, 520);
+  document.getElementById('stPeople').textContent = Math.round(stats.people).toLocaleString();
+  document.getElementById('stPower').textContent  = stats.power.toFixed(1);
+}, 2000);</code></pre>
+  <ol class="lineseq">
+    <li><code>Math.random() - 0.5</code> —— 产生 −0.5~+0.5 的随机数，乘 step 就是"小步"。纯随机（8600 跳到 200）一看就假，游走才有"传感器数据"的味道。</li>
+    <li><code>toLocaleString()</code> —— 数字加千分位（8,634）。<code>toFixed(1)</code> —— 保留 1 位小数。展示细节决定"像不像真的"。</li>
+    <li><code>document.getElementById('xx').textContent = ...</code> —— JS 改网页内容的最基本动作：找到元素、改文字。三维与面板就是靠这种方式各自刷新的。</li>
+  </ol>
+
+  <h2>二、ECharts 三步走：init → setOption → 更新数据</h2>
+  <pre class="code"><code>// ① 初始化:把一个 div 变成图表
+const chart = echarts.init(document.getElementById('chart'));
+
+// ② 配置(setOption):声明"这是条折线图、x 轴是时间、渐变填充..."
+chart.setOption({
+  grid: { left: 44, right: 12, top: 14, bottom: 24 },   // 图在框里的位置(留出坐标轴空间)
+  xAxis: { type: 'category', data: [] },                 // x 轴:类别轴(放时间文字)
+  yAxis: { type: 'value' },                              // y 轴:数值轴
+  series: [{                                             // 数据系列:一条平滑折线
+    type: 'line', data: [], smooth: true, symbol: 'none',
+    lineStyle: { color: '#0891b2', width: 2 },
+    areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,   // 底部渐隐填充
+      colorStops: [{ offset: 0, color: 'rgba(8,145,178,.35)' },
+                   { offset: 1, color: 'rgba(8,145,178,0)' }] } },
+  }],
+});
+
+// ③ 每秒:推一个新点,超过 40 个就丢最老的,再 setOption 更新
+setInterval(() => {
+  labels.push(now());  values.push(stats.power);
+  if (labels.length > 40) { labels.shift(); values.shift(); }
+  chart.setOption({ xAxis: { data: labels }, series: [{ data: values }] });
+}, 1000);</code></pre>
+  <ol class="lineseq">
+    <li>ECharts 的使用心法：<b>先声明"图长什么样"（setOption），之后只喂数据</b>。改数据不用重建图，再调一次 setOption 覆盖即可。</li>
+    <li><code>shift()</code> —— 数组丢掉第一个元素。"推一个、丢一个" = 滚动窗口，监控曲线的标准做法。</li>
+    <li><code>areaStyle</code> 的渐变（上实下虚）是"科技感曲线"的灵魂配方，直接抄。</li>
+  </ol>
+
+  <h2>三、"三维与二维联动"：一句话值千金</h2>
+  <p>看演示：三维里来一条告警，右上"未处理告警"数字 +1——两者根本不认识对方，它们只是<b>读同一个账本 <code>stats / alarms</code></b>。这叫"单一数据源"：</p>
+  <div class="flow">
+    <span class="step">数据层(账本)</span><span class="arr">→</span>
+    <span class="step">三维层读它:染楼/波纹</span>
+    <span class="arr">+</span>
+    <span class="step">面板层读它:数字/曲线</span>
+  </div>
+  <p>答辩讲架构，就讲这张小图。</p>
+
+  <div class="story">真实项目 <code>ui.js</code>:左侧 4 个指标 + 能耗曲线 + 楼栋信息卡里的 24h 柱图,全是本课套路;
+  <code>main.js</code> 里的 <code>setInterval</code> 们就是数据源(接真实系统时统一换成 WebSocket)。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业</h3>
+    <ol>
+      <li>把本课"数字面板三件套"搬进 my1.html,加一个"今日用水 t"指标(初始 128.5,步长 0.4,范围 120~135)。</li>
+      <li>把曲线颜色改成绿色系(#059669),渐变也配成绿色。</li>
+      <li>挑战:复制第 9 课告警逻辑,让"未处理告警"数字真的跟着三维场景增减(单一数据源实战)。</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 为什么用"随机游走"而不是纯随机数？</summary>
+    <p>真实传感器读数是连续缓变的（这一秒和上一秒相近），游走模拟这种惯性；纯随机大跳看起来一眼假。</p></details>
+  <details class="quiz"><summary>2. ECharts 图表创建后,更新数据的正确姿势是？</summary>
+    <p>改数据数组后再次 setOption（覆盖 xAxis.data 和 series.data），不需要（也不应该）重新 init。</p></details>
+  <details class="quiz"><summary>3. 三维里的告警和面板上的数字是怎么"联动"的？</summary>
+    <p>没有直接联动——都读同一个数据源（账本），谁变了各自刷新自己那部分。单一数据源是大型界面的标配架构。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson9.html"><b>上一课</b>第 9 课 · 告警闭环</a>
+    <a href="./lesson11.html"><b>下一课</b>第 11 课 · 组装与答辩(毕业课) →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const CAMPUS = { lon: 114.30, lat: 30.50 };
+  function offsetLL(dx, dy) {
+    const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+    const lat = CAMPUS.lat + dy / 111320;
+    return [lon, lat];
+  }
+  const M_LON = 111320 * Math.cos(CAMPUS.lat * Math.PI / 180);
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-40, -120), 850),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+
+  // 背景楼群(第5课配方,视觉参照)
+  const BS = [
+    { dx: -60, dy: 40, w: 40, d: 20, f: 5, c: '#3fbdf2' },
+    { dx: 20, dy: 40, w: 40, d: 20, f: 5, c: '#3fbdf2' },
+    { dx: 80, dy: 40, w: 36, d: 24, f: 6, c: '#26c6da' },
+    { dx: -30, dy: -50, w: 44, d: 26, f: 4, c: '#7fd8ff' },
+    { dx: 50, dy: -50, w: 30, d: 22, f: 2, c: '#ffb74d' },
+  ];
+  for (const b of BS) {
+    const [lon, lat] = offsetLL(b.dx, b.dy);
+    const h = b.f * 3.2, hl = b.w / 2 / M_LON, ht = b.d / 2 / 111320;
+    viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy([
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat + ht),
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat + ht),
+        ]),
+        height: 0, extrudedHeight: h,
+        material: Cesium.Color.fromCssColorString(b.c).withAlpha(0.8),
+        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.35),
+      },
+    });
+  }
+
+  /* ===== 数字面板 ===== */
+  function walk(v, step, min, max) {
+    v += (Math.random() - 0.5) * step;
+    return Math.min(max, Math.max(min, v));
+  }
+  const stats = { people: 8600, power: 420, alarms: 0 };
+  let streaming = true;
+
+  function refreshStats() {
+    document.getElementById('stPeople').textContent = Math.round(stats.people).toLocaleString();
+    document.getElementById('stPower').textContent = stats.power.toFixed(1);
+    document.getElementById('stAlarm').textContent = stats.alarms;
+  }
+  setInterval(() => {
+    if (!streaming) return;
+    stats.people = walk(stats.people, 60, 8200, 9200);
+    stats.power = walk(stats.power, 12, 350, 520);
+    refreshStats();
+  }, 2000);
+  refreshStats();
+
+  /* ===== ECharts 曲线 ===== */
+  const chart = echarts.init(document.getElementById('chart'));
+  const labels = [], values = [];
+  chart.setOption({
+    grid: { left: 44, right: 12, top: 14, bottom: 24 },
+    xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10, color: '#94a3b8' } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { fontSize: 10, color: '#94a3b8' } },
+    series: [{
+      type: 'line', data: values, smooth: true, symbol: 'none',
+      lineStyle: { color: '#0891b2', width: 2 },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+        colorStops: [{ offset: 0, color: 'rgba(8,145,178,.35)' }, { offset: 1, color: 'rgba(8,145,178,0)' }] } },
+    }],
+  });
+  setInterval(() => {
+    if (!streaming) return;
+    const t = new Date();
+    labels.push(String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0'));
+    values.push(+stats.power.toFixed(1));
+    if (labels.length > 40) { labels.shift(); values.shift(); }
+    chart.setOption({ xAxis: { data: labels }, series: [{ data: values }] });
+  }, 1000);
+
+  // 模拟告警数联动(随机涨落,演示"单一数据源")
+  setInterval(() => {
+    if (!streaming) return;
+    if (Math.random() < 0.4 && stats.alarms < 5) stats.alarms++;
+    else if (stats.alarms > 0 && Math.random() < 0.5) stats.alarms--;
+    refreshStats();
+  }, 4000);
+
+  function toggleStream() { streaming = !streaming; }
+  window.addEventListener('resize', () => chart.resize());
+</script>
+</body>
+</html>

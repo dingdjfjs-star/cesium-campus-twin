@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 5 课 · 数据驱动 | Cesium 数字孪生入门</title>
+<link href="../cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="./common.css" rel="stylesheet">
+<script>window.CESIUM_BASE_URL = '../cesium/';</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<header class="site">
+  <a href="./lesson4.html">← 上一课</a>
+  <span class="crs">第 5 课 · 数据驱动：从一栋楼到一座城</span>
+  <a href="./lesson6.html">下一课 →</a>
+</header>
+
+<main>
+  <h1>第 5 课：数据驱动——整个课程最重要的思想</h1>
+  <p class="lead">前面画楼都是"一栋一栋手写"。这课把楼写进<b>表格（数组）</b>，用循环批量生成。学完这课，"换一所学校"对你来说只是"换一张表"。</p>
+
+  <h2>先看效果 👇</h2>
+  <section class="demo" id="demo">
+    <div id="globe"></div>
+    <div class="demo-bar">
+      <button class="run" onclick="buildOne()">🏢 只盖图书馆</button>
+      <button class="run ok" onclick="buildAll()">🏙 盖起整座校园(8栋)</button>
+      <button class="run" onclick="viewer.entities.removeAll()">🗑 推平</button>
+      <span class="note">试试:先盖图书馆再盖全部,感受"循环"的威力</span>
+    </div>
+  </section>
+
+  <h2>一、先解决上节课的痛：offsetLL 换算函数</h2>
+  <p>上节课为了画 60 米宽的楼，手算了 <code>0.00031°</code> 这种数字——累且容易错。现在写个函数一劳永逸：</p>
+  <pre class="code"><code>const CAMPUS = { lon: 114.30, lat: 30.50 };   // 校园原点(一个点撬动整座校园!)
+
+// 把"向东 dx 米、向北 dy 米"翻译成经纬度
+function offsetLL(dx, dy) {
+  const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+  const lat = CAMPUS.lat + dy / 111320;
+  return [lon, lat];
+}
+
+// 用法:想在原点"东边60米、北边40米"处定位 → offsetLL(60, 40)</code></pre>
+  <ol class="lineseq">
+    <li>从此写坐标只说<b>米</b>：<code>dx</code> 向东、<code>dy</code> 向北（数学课的坐标系，原点在校园中心）。</li>
+    <li>纬度方向：<code>111320 米 = 1 度</code>（上节课的口诀）。经度方向多乘一个 <code>cos(纬度)</code>，就是把"越往两极经线圈越小"翻译成代码。</li>
+    <li><b>妙处</b>：整座校园所有楼都相对"原点"定位。想搬家？只改 <code>CAMPUS</code> 两个数字，全校楼整体平移到地球任何角落。这就是"一个点撬动整座校园"。</li>
+  </ol>
+
+  <h2>二、把楼写进"表格"（数组）</h2>
+  <pre class="code"><code>const BUILDINGS = [
+  //      名字          东dx   北dy   宽w  深d  层数  颜色
+  { name: '教学楼A', dx: -60, dy:  40, w: 44, d: 22, floors: 5, color: '#3fbdf2' },
+  { name: '教学楼B', dx:  10, dy:  40, w: 44, d: 22, floors: 5, color: '#3fbdf2' },
+  { name: '实验楼',   dx:  80, dy:  40, w: 40, d: 26, floors: 6, color: '#26c6da' },
+  { name: '图书馆',   dx:   0, dy: -30, w: 48, d: 30, floors: 5, color: '#7fd8ff' },
+  { name: '行政楼',   dx: -70, dy: -60, w: 36, d: 22, floors: 4, color: '#80cbc4' },
+  { name: '食堂',     dx:  60, dy: -60, w: 32, d: 24, floors: 2, color: '#ffb74d' },
+  { name: '学生公寓1', dx: -110, dy: -10, w: 16, d: 34, floors: 6, color: '#66bb6a' },
+  { name: '学生公寓2', dx: -110, dy:  40, w: 16, d: 34, floors: 6, color: '#66bb6a' },
+];</code></pre>
+  <p>这张表就是"世界的设计图"。每行一个对象（一张小表），描述一栋楼。看不懂语法？拆开：</p>
+  <ul>
+    <li>最外层方括号 <code>[ ... ]</code> 表示"一排东西"（数组），里面用逗号分隔 8 张小表；</li>
+    <li>每张小表 <code>{ name: ..., dx: ... }</code> 就是你第 3 课学的对象"填表"写法。</li>
+  </ul>
+
+  <h2>三、循环：一行代码盖八栋楼</h2>
+  <pre class="code"><code>for (const b of BUILDINGS) {          // 依次取出每栋楼的数据,叫它 b
+  const [lon, lat] = offsetLL(b.dx, b.dy);        // 米 → 经纬度
+  const h = b.floors * 3.2;                        // 层数 → 楼高(米)
+  const halfLon = b.w / 2 / 95300;                 // 宽的一半 → 经度差
+  const halfLat = b.d / 2 / 111320;                // 深的一半 → 纬度差
+
+  const ent = viewer.entities.add({
+    polygon: {
+      hierarchy: new Cesium.PolygonHierarchy([
+        Cesium.Cartesian3.fromDegrees(lon - halfLon, lat - halfLat),
+        Cesium.Cartesian3.fromDegrees(lon + halfLon, lat - halfLat),
+        Cesium.Cartesian3.fromDegrees(lon + halfLon, lat + halfLat),
+        Cesium.Cartesian3.fromDegrees(lon - halfLon, lat + halfLat),
+      ]),
+      height: 0,
+      extrudedHeight: h,
+      material: Cesium.Color.fromCssColorString(b.color).withAlpha(0.8),
+      outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.4),
+    },
+  });
+
+  // 楼顶名牌
+  viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, h + 12),
+    label: { text: b.name, font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+             showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6) },
+  });
+
+  ent.myInfo = b;   // ★ 关键伏笔:把整张小表"贴"在实体身上,第7课点击时取用!
+}</code></pre>
+  <ol class="lineseq">
+    <li><code>for (const b of BUILDINGS)</code> —— "把 BUILDINGS 里的东西一个个拿出来，每次叫 b"。循环体（大括号里）就写"画一栋楼"，和第 4 课几乎一样，只是所有数字都从 <code>b</code> 身上取。</li>
+    <li><code>b.floors * 3.2</code> —— 数据表里存的是<b>层数</b>（人话），高度用时再算。好数据表存"业务概念"，不存"渲染细节"。</li>
+    <li><code>ent.myInfo = b</code> —— <b>本课最重要的一行</b>。给实体挂一个自定义属性，把它的"身份证"（名字、层数、颜色……）随身携带。第 7 课鼠标点到这栋楼时，就能从 <code>ent.myInfo</code> 里读出全部信息弹信息卡。</li>
+  </ol>
+
+  <h2>四、为什么说这是"最重要的思想"？</h2>
+  <table class="tbl">
+    <tr><th>写法</th><th>画 8 栋楼</th><th>加第 9 栋</th><th>换学校</th></tr>
+    <tr><td>一栋栋手写</td><td>8 段几乎重复的代码</td><td>再抄一段</td><td>全部重写 💀</td></tr>
+    <tr><td><b>数据驱动</b></td><td>1 个循环</td><td>表里加一行 ✅</td><td>换一张表 + 改原点 ✅</td></tr>
+  </table>
+  <div class="story">真实项目的 <code>campusData.js</code> 就是这张表的"满血版"(41 栋楼,每行多了 id/rot 旋转角/roof 屋顶色/
+  usage 用途/capacity 人数/powerBase 功率),画图代码在 <code>sceneObjects.js</code>。
+  我们把一张卫星图变成三维校园,改的只是这张表——代码一行没动。答辩讲"架构设计"时就讲这个。</div>
+
+  <div class="homework">
+    <h3>📝 动手作业（今天的作业=给你未来项目打地基）</h3>
+    <ol>
+      <li>把本课 <code>BUILDINGS</code> 表复制进你的 <code>my1.html</code>，<b>删掉一半楼</b>，改成你自己起的名字。</li>
+      <li>在表里<b>加一行</b>你想要的楼（比如"电竞馆"，10 层，紫色 <code>#ab47bc</code>），位置别和其他楼重叠。</li>
+      <li>把 <code>CAMPUS.lon/lat</code> 改成你学校的真实坐标（第 2 课学过怎么查）——你的校园搬回家了！</li>
+      <li>思考题（不用写码）：想让楼"斜着放"（比如宿舍群朝北东 30°），数据表该加什么字段？</li>
+    </ol>
+  </div>
+
+  <h2>检查点</h2>
+  <details class="quiz"><summary>1. 为什么数据表里存 floors（层数）而不是直接存 height（米）？</summary>
+    <p>层数是"业务概念"，人一看就懂、也好从资料里录入；米是"渲染细节"，让代码去换算。数据和渲染各司其职。</p></details>
+  <details class="quiz"><summary>2. <code>ent.myInfo = b</code> 这行为什么重要？</summary>
+    <p>它把数据表"缝"在了实体身上，让"画出来的楼"和"它的信息"永远绑在一起——第 7 课点击楼弹出信息卡，全靠它。</p></details>
+  <details class="quiz"><summary>3. 换一所学校，最少要改几处？</summary>
+    <p>两处：CAMPUS 原点坐标（搬到哪）+ BUILDINGS 表（长什么样）。渲染代码零修改。</p></details>
+
+  <nav class="pager">
+    <a href="./lesson4.html"><b>上一课</b>第 4 课 · 画出第一栋楼</a>
+    <a href="./lesson6.html"><b>下一课</b>第 6 课 · 道路、水面与绿化 →</a>
+  </nav>
+</main>
+
+<script>
+  window.addEventListener('error', function (e) {
+    var b = document.createElement('div');
+    b.className = 'err-banner';
+    b.textContent = '脚本错误: ' + e.message;
+    document.body.appendChild(b);
+  });
+
+  const CAMPUS = { lon: 114.30, lat: 30.50 };
+  function offsetLL(dx, dy) {
+    const lon = CAMPUS.lon + dx / (111320 * Math.cos(CAMPUS.lat * Math.PI / 180));
+    const lat = CAMPUS.lat + dy / 111320;
+    return [lon, lat];
+  }
+
+  const BUILDINGS = [
+    { name: '教学楼A', dx: -60, dy: 40, w: 44, d: 22, floors: 5, color: '#3fbdf2' },
+    { name: '教学楼B', dx: 10, dy: 40, w: 44, d: 22, floors: 5, color: '#3fbdf2' },
+    { name: '实验楼', dx: 80, dy: 40, w: 40, d: 26, floors: 6, color: '#26c6da' },
+    { name: '图书馆', dx: 0, dy: -30, w: 48, d: 30, floors: 5, color: '#7fd8ff' },
+    { name: '行政楼', dx: -70, dy: -60, w: 36, d: 22, floors: 4, color: '#80cbc4' },
+    { name: '食堂', dx: 60, dy: -60, w: 32, d: 24, floors: 2, color: '#ffb74d' },
+    { name: '学生公寓1', dx: -110, dy: -10, w: 16, d: 34, floors: 6, color: '#66bb6a' },
+    { name: '学生公寓2', dx: -110, dy: 40, w: 16, d: 34, floors: 6, color: '#66bb6a' },
+  ];
+
+  const viewer = new Cesium.Viewer('globe', {
+    baseLayerPicker: false, geocoder: false, homeButton: false,
+    sceneModePicker: false, navigationHelpButton: false,
+    animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false,
+  });
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(...offsetLL(-120, -180), 900),
+    orientation: { heading: Cesium.Math.toRadians(10), pitch: Cesium.Math.toRadians(-55), roll: 0 },
+  });
+
+  const M_LON = 111320 * Math.cos(CAMPUS.lat * Math.PI / 180); // 该纬度:1度经度的米数
+  const M_LAT = 111320;
+
+  function buildOne() { build(BUILDINGS[3]); }              // 图书馆
+  function buildAll() { for (const b of BUILDINGS) build(b); }
+
+  function build(b) {
+    const [lon, lat] = offsetLL(b.dx, b.dy);
+    const h = b.floors * 3.2;
+    const hl = b.w / 2 / M_LON, ht = b.d / 2 / M_LAT;
+    const ent = viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy([
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat - ht),
+          Cesium.Cartesian3.fromDegrees(lon + hl, lat + ht),
+          Cesium.Cartesian3.fromDegrees(lon - hl, lat + ht),
+        ]),
+        height: 0,
+        extrudedHeight: h,
+        material: Cesium.Color.fromCssColorString(b.color).withAlpha(0.8),
+        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.4),
+      },
+    });
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, h + 12),
+      label: { text: b.name, font: '13px sans-serif', fillColor: Cesium.Color.WHITE,
+               showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6) },
+    });
+    ent.myInfo = b;
+  }
+</script>
+</body>
+</html>
